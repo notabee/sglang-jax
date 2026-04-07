@@ -232,7 +232,7 @@ class Glm5Attention(nnx.Module):
         # Combine Q and K
         q = jnp.concatenate([q_nope, q_pe], axis=-1)
         k_pe_repeated = k_pe.repeat(self.q_head_num, axis=1)
-        k_pe_repeated = jax.lax.with_sharding_constraint(
+        k_pe_repeated = jax.sharding.reshard(
             k_pe_repeated, NamedSharding(self.mesh, P(None, "tensor", None))
         )
         k = jnp.concatenate([k_nope, k_pe_repeated], axis=-1)
