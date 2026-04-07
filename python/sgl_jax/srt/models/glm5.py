@@ -507,7 +507,7 @@ class Glm5Model(nnx.Module):
                     dtype=dtype,
                     mesh=mesh,
                 )
-                for i in range(5) # For dummy testing
+                for i in range(config.num_hidden_layers)
             ]
         )
 
