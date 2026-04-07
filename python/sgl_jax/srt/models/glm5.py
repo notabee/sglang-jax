@@ -873,24 +873,6 @@ class Glm5ForCausalLM(nnx.Module):
                         concat_axis=mapping.concat_axis,
                         physical_to_logical_map=mapping.physical_to_logical_map,
                     )
-                        scale_sharding = None
-                        if mapping.sharding:
-                            target_dim_sharding = None
-                            if is_w2 and len(mapping.sharding) > 2:
-                                target_dim_sharding = mapping.sharding[2]
-                            elif not is_w2 and len(mapping.sharding) > 1:
-                                target_dim_sharding = mapping.sharding[1]
-                            scale_sharding = (mapping.sharding[0], target_dim_sharding, None)
-
-                        new_moe_mappings[scale_key] = WeightMapping(
-                            target_path=[target_scale_param] + scale_src_paths,
-                            sharding=scale_sharding,
-                            transpose=False,
-                            reshape=scale_reshape,
-                            repeat=scale_repeat,
-                            concat_axis=mapping.concat_axis,
-                            physical_to_logical_map=mapping.physical_to_logical_map,
-                        )
                 moe_mappings = new_moe_mappings
 
             mappings.update(moe_mappings)
