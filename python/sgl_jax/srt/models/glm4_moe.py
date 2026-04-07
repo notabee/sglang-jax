@@ -685,7 +685,7 @@ class Glm4MoeForCausalLM(nnx.Module):
                     new_moe_mappings[key] = WeightMapping(
                         target_path=[target_param] + src_paths,
                         sharding=mapping.sharding,
-                        transpose=False,
+                        transpose=True,
                         concat_axis=mapping.concat_axis,
                         physical_to_logical_map=mapping.physical_to_logical_map,
                     )
