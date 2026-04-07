@@ -861,33 +861,18 @@ class Glm5ForCausalLM(nnx.Module):
                     is_w2 = target_param.endswith("wo") or target_param.endswith("w2")
                     out_dim = hidden_size if is_w2 else inter_size
 
-                    if use_fused:
-                        in_dim = inter_size if is_w2 else hidden_size
-                        num_blocks = in_dim // BLOCK_SIZE
-                        scale_reshape = (num_physical_experts, 1, 1, out_dim)
-                        scale_repeat = (1, num_blocks)
-
-                        scale_sharding = None
-                        if mapping.sharding:
-                            scale_sharding = (
-                                mapping.sharding[0],
-                                mapping.sharding[1],
-                                None,
-                                mapping.sharding[2],
-                            )
-
-                        new_moe_mappings[scale_key] = WeightMapping(
-                            target_path=[target_scale_param] + scale_src_paths,
-                            sharding=scale_sharding,
-                            transpose=False,
-                            reshape=scale_reshape,
-                            repeat=scale_repeat,
-                            concat_axis=mapping.concat_axis,
-                            physical_to_logical_map=mapping.physical_to_logical_map,
-                        )
-                    else:
-                        scale_reshape = (num_physical_experts, 1, 1, out_dim)
-                        scale_repeat = None
+                    # For GLM-5 FP8, scales are stored as [num_experts, in_blocks, out_blocks]
+                    # We need to transpose them to [num_experts, out_blocks, in_blocks] for moe.py
+                    new_moe_mappings[scale_key] = WeightMapping(
+                        target_path=[target_scale_param] + scale_src_paths,
+                        sharding=None,
+                        transpose=False,
+                        transpose_axes=(0, 2, 1),
+                        reshape=None,
+                        repeat=None,
+                        concat_axis=mapping.concat_axis,
+                        physical_to_logical_map=mapping.physical_to_logical_map,
+                    )
                         scale_sharding = None
                         if mapping.sharding:
                             target_dim_sharding = None
