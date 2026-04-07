@@ -779,14 +779,13 @@ class Glm5ForCausalLM(nnx.Module):
                 transpose=False,
             )
 
-        # QK Norm
-        if getattr(self.config, "use_qk_norm", True):
-            mappings[f"{prefix}.self_attn.q_norm.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.q_norm.scale", sharding=(None,)
-            )
-            mappings[f"{prefix}.self_attn.k_norm.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.k_norm.scale", sharding=(None,)
-            )
+        # DSA Indexer Norm
+        mappings[f"{prefix}.self_attn.indexer.k_norm.weight"] = WeightMapping(
+            target_path=f"{target_prefix}.self_attn.indexer.k_norm.weight", sharding=(None,)
+        )
+        mappings[f"{prefix}.self_attn.indexer.k_norm.bias"] = WeightMapping(
+            target_path=f"{target_prefix}.self_attn.indexer.k_norm.bias", sharding=(None,)
+        )
 
         if is_mlp_layer:
             mappings[f"{prefix}.mlp.gate_proj.weight"] = WeightMapping(
