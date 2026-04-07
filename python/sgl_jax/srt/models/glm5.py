@@ -27,6 +27,11 @@ from sgl_jax.srt.utils.weight_utils import WeightLoader, WeightMapping
 
 logger = logging.getLogger(__name__)
 
+class GlmNorm(nnx.Module):
+    def __init__(self, dim: int, dtype: jnp.dtype = jnp.bfloat16):
+        self.weight = nnx.Param(jnp.ones((dim,), dtype=dtype))
+        self.bias = nnx.Param(jnp.zeros((dim,), dtype=dtype))
+
 class GlmDsaIndexer(nnx.Module):
     def __init__(
         self,
@@ -59,8 +64,7 @@ class GlmDsaIndexer(nnx.Module):
             mesh=mesh,
             scope_name="wk",
         )
-        self.k_norm_weight = nnx.Param(jnp.ones((index_head_dim,), dtype=dtype))
-        self.k_norm_bias = nnx.Param(jnp.zeros((index_head_dim,), dtype=dtype))
+        self.k_norm = GlmNorm(index_head_dim, dtype)
         
         self.weights_proj = LinearBase(
             input_size=hidden_size,
