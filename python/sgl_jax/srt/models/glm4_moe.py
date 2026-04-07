@@ -592,10 +592,10 @@ class Glm4MoeForCausalLM(nnx.Module):
 
         # QK Norm
         if getattr(self.config, "use_qk_norm", True):
-            mappings[f"{prefix}.attention.query_layernorm.weight"] = WeightMapping(
+            mappings[f"{prefix}.self_attn.q_norm.weight"] = WeightMapping(
                 target_path=f"{target_prefix}.self_attn.q_norm.scale", sharding=(None,)
             )
-            mappings[f"{prefix}.attention.key_layernorm.weight"] = WeightMapping(
+            mappings[f"{prefix}.self_attn.k_norm.weight"] = WeightMapping(
                 target_path=f"{target_prefix}.self_attn.k_norm.scale", sharding=(None,)
             )
 
