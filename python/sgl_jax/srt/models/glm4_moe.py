@@ -649,13 +649,13 @@ class Glm4MoeForCausalLM(nnx.Module):
                 )
         else:
             mappings[f"{prefix}.mlp.gate.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.mlp.gate.weight",
+                target_path=f"{target_prefix}.moe_gate.kernel",
                 sharding=(None, None),
                 transpose=True,
             )
             # GLM-4 uses e_score_correction_bias
             mappings[f"{prefix}.mlp.gate.e_score_correction_bias"] = WeightMapping(
-                target_path=f"{target_prefix}.mlp.gate.e_score_correction_bias", sharding=(None,)
+                target_path=f"{target_prefix}.moe_gate.bias", sharding=(None,)
             )
 
             num_logical_experts = self.config.n_routed_experts
