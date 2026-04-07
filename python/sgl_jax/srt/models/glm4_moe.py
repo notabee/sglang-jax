@@ -99,7 +99,7 @@ class Glm4MoeAttention(nnx.Module):
         self.c_proj = LinearBase(
             input_size=num_heads * self.head_dim,
             output_size=hidden_size,
-            use_bias=attention_bias,
+            use_bias=False,
             kernel_axes=("tensor", None),
             params_dtype=dtype,
             mesh=mesh,
