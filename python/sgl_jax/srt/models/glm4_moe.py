@@ -463,6 +463,22 @@ class Glm4MoeForCausalLM(nnx.Module):
             )
         self.logits_processor = LogitsProcessor(config.vocab_size, mesh=self.mesh)
 
+    def __call__(
+        self,
+        forward_batch: ForwardBatch,
+        token_to_kv_pool: KVCache,
+        logits_metadata: LogitsMetadata,
+    ):
+        hidden_states, layers_kv_fused, layers_topk_ids = self.model(
+            forward_batch,
+            token_to_kv_pool,
+        )
+        if not getattr(self.config, "tie_word_embeddings", False):
+            output = self.logits_processor(hidden_states, self.lm_head, logits_metadata)
+        else:
+            output = self.logits_processor(hidden_states, self.model.embed_tokens, logits_metadata)
+        return output, layers_kv_fused, True, layers_topk_ids
+
     def load_weights(self, model_config: ModelConfig):
         loader = WeightLoader(
             model=self,
