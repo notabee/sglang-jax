@@ -476,7 +476,7 @@ class Glm4MoeForCausalLM(nnx.Module):
 
     def _create_glm4_moe_weight_mappings(self, model_config: ModelConfig) -> dict:
         mappings = {
-            "model.word_embeddings.weight": WeightMapping(
+            "model.embed_tokens.weight": WeightMapping(
                 target_path="model.embed_tokens.embedding",
                 sharding=("tensor", None),
                 transpose=False,
