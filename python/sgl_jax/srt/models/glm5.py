@@ -942,4 +942,7 @@ class Glm5ForCausalLM(nnx.Module):
 
         return mappings
 
-EntryClass = Glm5ForCausalLM
+class GlmMoeDsaForCausalLM(Glm5ForCausalLM):
+    pass
+
+EntryClass = [Glm5ForCausalLM, GlmMoeDsaForCausalLM]
