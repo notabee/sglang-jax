@@ -196,7 +196,7 @@ class Glm5Attention(nnx.Module):
         )
         self.attn = RadixAttention(
             num_heads=num_heads,
-            head_dim=self.head_dim,
+            head_dim=256,
             scaling=self.scaling,
             num_kv_heads=num_kv_heads,
             layer_id=layer_id,
