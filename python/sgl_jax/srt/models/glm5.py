@@ -734,38 +734,38 @@ class Glm5ForCausalLM(nnx.Module):
         )
 
         if is_static_quant:
-            mappings[f"{prefix}.self_attn.q_a_proj.weight_scale"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.q_a_proj.weight_scale_inv",
+            mappings[f"{prefix}.self_attn.q_a_proj.weight_scale_inv"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.q_a_proj.weight_scale",
                 sharding=(None,),
                 transpose=False,
             )
-            mappings[f"{prefix}.self_attn.q_b_proj.weight_scale"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.q_b_proj.weight_scale_inv",
+            mappings[f"{prefix}.self_attn.q_b_proj.weight_scale_inv"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.q_b_proj.weight_scale",
                 sharding=("tensor",),
                 transpose=False,
             )
-            mappings[f"{prefix}.self_attn.kv_a_proj_with_mqa.weight_scale"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.kv_a_proj_with_mqa.weight_scale_inv",
+            mappings[f"{prefix}.self_attn.kv_a_proj_with_mqa.weight_scale_inv"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.kv_a_proj_with_mqa.weight_scale",
                 sharding=(None,),
                 transpose=False,
             )
-            mappings[f"{prefix}.self_attn.kv_b_proj.weight_scale"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.kv_b_proj.weight_scale_inv",
+            mappings[f"{prefix}.self_attn.kv_b_proj.weight_scale_inv"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.kv_b_proj.weight_scale",
                 sharding=("tensor",),
                 transpose=False,
             )
-            mappings[f"{prefix}.self_attn.o_proj.weight_scale"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.o_proj.weight_scale_inv",
+            mappings[f"{prefix}.self_attn.o_proj.weight_scale_inv"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.o_proj.weight_scale",
                 sharding=(None,),
                 transpose=False,
             )
-            mappings[f"{prefix}.self_attn.indexer.wk.weight_scale"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.indexer.wk.weight_scale_inv",
+            mappings[f"{prefix}.self_attn.indexer.wk.weight_scale_inv"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.indexer.wk.weight_scale",
                 sharding=(None,),
                 transpose=False,
             )
-            mappings[f"{prefix}.self_attn.indexer.wq_b.weight_scale"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.indexer.wq_b.weight_scale_inv",
+            mappings[f"{prefix}.self_attn.indexer.wq_b.weight_scale_inv"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.indexer.wq_b.weight_scale",
                 sharding=(None,),
                 transpose=False,
             )
@@ -796,17 +796,17 @@ class Glm5ForCausalLM(nnx.Module):
                 transpose=False,
             )
             if is_static_quant:
-                mappings[f"{prefix}.mlp.gate_proj.weight_scale"] = WeightMapping(
+                mappings[f"{prefix}.mlp.gate_proj.weight_scale_inv"] = WeightMapping(
                     target_path=f"{target_prefix}.mlp.gate_proj.weight_scale",
                     sharding=(None, None),
                     transpose=False,
                 )
-                mappings[f"{prefix}.mlp.up_proj.weight_scale"] = WeightMapping(
+                mappings[f"{prefix}.mlp.up_proj.weight_scale_inv"] = WeightMapping(
                     target_path=f"{target_prefix}.mlp.up_proj.weight_scale",
                     sharding=(None, None),
                     transpose=False,
                 )
-                mappings[f"{prefix}.mlp.down_proj.weight_scale"] = WeightMapping(
+                mappings[f"{prefix}.mlp.down_proj.weight_scale_inv"] = WeightMapping(
                     target_path=f"{target_prefix}.mlp.down_proj.weight_scale",
                     sharding=(None, None),
                     transpose=False,
