@@ -546,24 +546,24 @@ class Glm4MoeForCausalLM(nnx.Module):
         mappings[f"{prefix}.self_attn.q_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.q_proj.{w_name}",
             sharding=(None, "tensor"),
-            transpose=True,
+            transpose=False,
         )
         mappings[f"{prefix}.self_attn.k_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.k_proj.{w_name}",
             sharding=(None, "tensor"),
-            transpose=True,
+            transpose=False,
             kv_head_padding=True,
         )
         mappings[f"{prefix}.self_attn.v_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.v_proj.{w_name}",
             sharding=(None, "tensor"),
-            transpose=True,
+            transpose=False,
             kv_head_padding=True,
         )
         mappings[f"{prefix}.self_attn.o_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.c_proj.{w_name}",
             sharding=("tensor", None),
-            transpose=True,
+            transpose=False,
         )
 
         # Biases
