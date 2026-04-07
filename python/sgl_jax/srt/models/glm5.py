@@ -6,6 +6,8 @@ import numpy as np
 from flax import nnx
 from jax import numpy as jnp
 from transformers import PretrainedConfig
+from jax.sharding import NamedSharding
+from jax.sharding import PartitionSpec as P
 
 from sgl_jax.srt.configs.model_config import ModelConfig, MoEBackend
 from sgl_jax.srt.eplb.expert_location import ExpertLocationMetadata
@@ -100,6 +102,7 @@ class Glm5Attention(nnx.Module):
         dtype: jnp.dtype = jnp.bfloat16,
     ):
         self.layer_id = layer_id
+        self.mesh = mesh
         assert num_heads % num_kv_heads == 0
 
         self.head_dim = head_dim or hidden_size // num_heads
@@ -228,7 +231,11 @@ class Glm5Attention(nnx.Module):
         
         # Combine Q and K
         q = jnp.concatenate([q_nope, q_pe], axis=-1)
-        k = jnp.concatenate([k_nope, k_pe.repeat(self.q_head_num, axis=1)], axis=-1)
+        k_pe_repeated = k_pe.repeat(self.q_head_num, axis=1)
+        k_pe_repeated = jax.lax.with_sharding_constraint(
+            k_pe_repeated, NamedSharding(self.mesh, P(None, "tensor", None))
+        )
+        k = jnp.concatenate([k_nope, k_pe_repeated], axis=-1)
         
         # 4. Attention
         attn_output, kv_fused = self.attn(
