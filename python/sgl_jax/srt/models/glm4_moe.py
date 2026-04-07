@@ -541,6 +541,23 @@ class Glm4MoeForCausalLM(nnx.Module):
             transpose=True,
         )
 
+        if is_static_quant:
+            mappings[f"{prefix}.attention.query_key_value.weight_scale"] = WeightMapping(
+                target_path=[
+                    f"{target_prefix}.self_attn.q_proj.weight_scale",
+                    f"{target_prefix}.self_attn.k_proj.weight_scale",
+                    f"{target_prefix}.self_attn.v_proj.weight_scale",
+                ],
+                sharding=("tensor", None),
+                transpose=False,
+                kv_head_padding=True,
+            )
+            mappings[f"{prefix}.attention.dense.weight_scale"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.c_proj.weight_scale",
+                sharding=(None, None),
+                transpose=False,
+            )
+
         # QK Norm
         if getattr(self.config, "use_qk_norm", True):
             mappings[f"{prefix}.attention.query_layernorm.weight"] = WeightMapping(
@@ -566,6 +583,22 @@ class Glm4MoeForCausalLM(nnx.Module):
                 sharding=("tensor", None),
                 transpose=True,
             )
+            if is_static_quant:
+                mappings[f"{prefix}.mlp.gate_proj.weight_scale"] = WeightMapping(
+                    target_path=f"{target_prefix}.mlp.gate_proj.weight_scale",
+                    sharding=(None, None),
+                    transpose=False,
+                )
+                mappings[f"{prefix}.mlp.up_proj.weight_scale"] = WeightMapping(
+                    target_path=f"{target_prefix}.mlp.up_proj.weight_scale",
+                    sharding=(None, None),
+                    transpose=False,
+                )
+                mappings[f"{prefix}.mlp.down_proj.weight_scale"] = WeightMapping(
+                    target_path=f"{target_prefix}.mlp.down_proj.weight_scale",
+                    sharding=(None, None),
+                    transpose=False,
+                )
         else:
             mappings[f"{prefix}.mlp.gate.weight"] = WeightMapping(
                 target_path=f"{target_prefix}.moe_gate.kernel",
@@ -588,6 +621,81 @@ class Glm4MoeForCausalLM(nnx.Module):
                 moe_backend=moe_backend,
                 physical_to_logical_map=None, # Handle physical mapping if needed later
             )
+
+            if is_static_quant:
+                new_moe_mappings = {}
+                BLOCK_SIZE = 256
+                hidden_size = self.config.hidden_size
+                inter_size = self.config.moe_intermediate_size
+                num_physical_experts = num_logical_experts # Assuming no redundant experts for now
+                use_fused = moe_backend == "fused"
+
+                for key, mapping in moe_mappings.items():
+                    target_param = mapping.target_path[0]
+                    src_paths = mapping.target_path[1:]
+
+                    new_moe_mappings[key] = WeightMapping(
+                        target_path=[target_param] + src_paths,
+                        sharding=mapping.sharding,
+                        transpose=mapping.transpose,
+                        concat_axis=mapping.concat_axis,
+                        physical_to_logical_map=mapping.physical_to_logical_map,
+                    )
+
+                    scale_key = key + "_scale"
+                    target_scale_param = target_param + "_scale"
+                    scale_src_paths = [p.replace(".weight", ".weight_scale") for p in src_paths]
+
+                    is_w2 = target_param.endswith("wo") or target_param.endswith("w2")
+                    out_dim = hidden_size if is_w2 else inter_size
+
+                    if use_fused:
+                        in_dim = inter_size if is_w2 else hidden_size
+                        num_blocks = in_dim // BLOCK_SIZE
+                        scale_reshape = (num_physical_experts, 1, 1, out_dim)
+                        scale_repeat = (1, num_blocks)
+
+                        scale_sharding = None
+                        if mapping.sharding:
+                            scale_sharding = (
+                                mapping.sharding[0],
+                                mapping.sharding[1],
+                                None,
+                                mapping.sharding[2],
+                            )
+
+                        new_moe_mappings[scale_key] = WeightMapping(
+                            target_path=[target_scale_param] + scale_src_paths,
+                            sharding=scale_sharding,
+                            transpose=False,
+                            reshape=scale_reshape,
+                            repeat=scale_repeat,
+                            concat_axis=mapping.concat_axis,
+                            physical_to_logical_map=mapping.physical_to_logical_map,
+                        )
+                    else:
+                        scale_reshape = (num_physical_experts, 1, 1, out_dim)
+                        scale_repeat = None
+                        scale_sharding = None
+                        if mapping.sharding:
+                            target_dim_sharding = None
+                            if is_w2 and len(mapping.sharding) > 2:
+                                target_dim_sharding = mapping.sharding[2]
+                            elif not is_w2 and len(mapping.sharding) > 1:
+                                target_dim_sharding = mapping.sharding[1]
+                            scale_sharding = (mapping.sharding[0], target_dim_sharding, None)
+
+                        new_moe_mappings[scale_key] = WeightMapping(
+                            target_path=[target_scale_param] + scale_src_paths,
+                            sharding=scale_sharding,
+                            transpose=False,
+                            reshape=scale_reshape,
+                            repeat=scale_repeat,
+                            concat_axis=mapping.concat_axis,
+                            physical_to_logical_map=mapping.physical_to_logical_map,
+                        )
+                moe_mappings = new_moe_mappings
+
             mappings.update(moe_mappings)
 
             num_shared = getattr(self.config, "n_shared_experts", 0)
@@ -607,6 +715,22 @@ class Glm4MoeForCausalLM(nnx.Module):
                     sharding=("tensor", None),
                     transpose=True,
                 )
+                if is_static_quant:
+                    mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale"] = WeightMapping(
+                        target_path=f"{target_prefix}.shared_experts.gate_proj.weight_scale",
+                        sharding=(None, None),
+                        transpose=False,
+                    )
+                    mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale"] = WeightMapping(
+                        target_path=f"{target_prefix}.shared_experts.up_proj.weight_scale",
+                        sharding=(None, None),
+                        transpose=False,
+                    )
+                    mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale"] = WeightMapping(
+                        target_path=f"{target_prefix}.shared_experts.down_proj.weight_scale",
+                        sharding=(None, None),
+                        transpose=False,
+                    )
 
         return mappings
 
