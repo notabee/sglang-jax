@@ -526,37 +526,67 @@ class Glm4MoeForCausalLM(nnx.Module):
 
         w_name = "weight_q" if is_static_quant else "weight"
 
-        # Attention mappings (assuming merged QKV in checkpoint)
-        mappings[f"{prefix}.attention.query_key_value.weight"] = WeightMapping(
-            target_path=[
-                f"{target_prefix}.self_attn.q_proj.{w_name}",
-                f"{target_prefix}.self_attn.k_proj.{w_name}",
-                f"{target_prefix}.self_attn.v_proj.{w_name}",
-            ],
+        # Attention mappings (separate Q, K, V in checkpoint)
+        mappings[f"{prefix}.self_attn.q_proj.weight"] = WeightMapping(
+            target_path=f"{target_prefix}.self_attn.q_proj.{w_name}",
+            sharding=(None, "tensor"),
+            transpose=True,
+        )
+        mappings[f"{prefix}.self_attn.k_proj.weight"] = WeightMapping(
+            target_path=f"{target_prefix}.self_attn.k_proj.{w_name}",
             sharding=(None, "tensor"),
             transpose=True,
             kv_head_padding=True,
         )
-        mappings[f"{prefix}.attention.dense.weight"] = WeightMapping(
+        mappings[f"{prefix}.self_attn.v_proj.weight"] = WeightMapping(
+            target_path=f"{target_prefix}.self_attn.v_proj.{w_name}",
+            sharding=(None, "tensor"),
+            transpose=True,
+            kv_head_padding=True,
+        )
+        mappings[f"{prefix}.self_attn.o_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.c_proj.{w_name}",
             sharding=("tensor", None),
             transpose=True,
         )
 
+        # Biases
+        mappings[f"{prefix}.self_attn.q_proj.bias"] = WeightMapping(
+            target_path=f"{target_prefix}.self_attn.q_proj.bias",
+            sharding=("tensor",),
+        )
+        mappings[f"{prefix}.self_attn.k_proj.bias"] = WeightMapping(
+            target_path=f"{target_prefix}.self_attn.k_proj.bias",
+            sharding=("tensor",),
+            kv_head_padding=True,
+        )
+        mappings[f"{prefix}.self_attn.v_proj.bias"] = WeightMapping(
+            target_path=f"{target_prefix}.self_attn.v_proj.bias",
+            sharding=("tensor",),
+            kv_head_padding=True,
+        )
+
         if is_static_quant:
-            mappings[f"{prefix}.attention.query_key_value.weight_scale"] = WeightMapping(
-                target_path=[
-                    f"{target_prefix}.self_attn.q_proj.weight_scale",
-                    f"{target_prefix}.self_attn.k_proj.weight_scale",
-                    f"{target_prefix}.self_attn.v_proj.weight_scale",
-                ],
-                sharding=("tensor", None),
+            mappings[f"{prefix}.self_attn.q_proj.weight_scale"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.q_proj.weight_scale",
+                sharding=("tensor",),
+                transpose=False,
+            )
+            mappings[f"{prefix}.self_attn.k_proj.weight_scale"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.k_proj.weight_scale",
+                sharding=("tensor",),
                 transpose=False,
                 kv_head_padding=True,
             )
-            mappings[f"{prefix}.attention.dense.weight_scale"] = WeightMapping(
+            mappings[f"{prefix}.self_attn.v_proj.weight_scale"] = WeightMapping(
+                target_path=f"{target_prefix}.self_attn.v_proj.weight_scale",
+                sharding=("tensor",),
+                transpose=False,
+                kv_head_padding=True,
+            )
+            mappings[f"{prefix}.self_attn.o_proj.weight_scale"] = WeightMapping(
                 target_path=f"{target_prefix}.self_attn.c_proj.weight_scale",
-                sharding=(None, None),
+                sharding=(None,),
                 transpose=False,
             )
 
