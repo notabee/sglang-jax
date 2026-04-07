@@ -186,6 +186,16 @@ class ModelRunner(BaseModelRunner):
     def initialize_jit(self):
         model_def, model_state = nnx.split(self.model)
         # note export for external modification
+        def check_leaf(path, x):
+            if isinstance(x, jax.ShapeDtypeStruct):
+                logger.error(f"Found ShapeDtypeStruct at {path}: {x}")
+            return x
+        
+        try:
+            jax.tree_util.tree_map_with_path(check_leaf, model_state)
+        except Exception as e:
+            logger.error(f"Failed to check tree leaves: {e}")
+
         self.model_state_leaves, model_state_def = jax.tree_util.tree_flatten(model_state)
         sampler_def, sampler_state = nnx.split(self.sampler)
         sampler_state_leaves, sampler_state_def = jax.tree_util.tree_flatten(sampler_state)
