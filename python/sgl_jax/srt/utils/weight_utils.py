@@ -1451,6 +1451,7 @@ class WeightLoader:
                 model_param.value = sharded_weight
             else:
                 model_param.value = sharded_weight.astype(model_param.value.dtype)
+            print(f"Successfully loaded {hf_key} -> {jax_path}")
         except Exception as e:
             logger.error("Failed to load %s -> %s: %s", hf_key, jax_path, str(e))
             raise
@@ -1572,6 +1573,7 @@ class WeightLoader:
                 model_param.value = sharded_weight
             else:
                 model_param.value = sharded_weight.astype(model_param.value.dtype)
+            print(f"Successfully loaded split {hf_key} -> {jax_path}")
 
             logger.debug("Split %s -> %s, shape: %s", hf_key, jax_path, processed_weight.shape)
 
