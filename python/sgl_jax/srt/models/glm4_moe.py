@@ -211,7 +211,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
         rope_theta = getattr(config, "rope_theta", 1000000)
         rope_scaling = getattr(config, "rope_scaling", None)
         max_position_embeddings = getattr(config, "max_position_embeddings", 131072)
-        self.head_dim = getattr(config, "head_dim", 128)
+        self.head_dim = getattr(config, "head_dim", None) or 128
         use_qk_norm = getattr(config, "use_qk_norm", True)
         
         partial_rotary_factor = getattr(config, "partial_rotary_factor", 0.5)
