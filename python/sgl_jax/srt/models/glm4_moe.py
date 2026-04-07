@@ -766,17 +766,17 @@ class Glm4MoeForCausalLM(nnx.Module):
                 if is_static_quant:
                     mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale"] = WeightMapping(
                         target_path=f"{target_prefix}.shared_experts.gate_proj.weight_scale",
-                        sharding=(None, None),
+                        sharding=(None,),
                         transpose=False,
                     )
                     mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale"] = WeightMapping(
                         target_path=f"{target_prefix}.shared_experts.up_proj.weight_scale",
-                        sharding=(None, None),
+                        sharding=(None,),
                         transpose=False,
                     )
                     mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale"] = WeightMapping(
                         target_path=f"{target_prefix}.shared_experts.down_proj.weight_scale",
-                        sharding=(None, None),
+                        sharding=(None,),
                         transpose=False,
                     )
 
