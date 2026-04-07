@@ -617,6 +617,15 @@ class Glm5ForCausalLM(nnx.Module):
                      mlp.experts.wi_1_scale.value = 1.0 / mlp.experts.wi_1_scale.value
                 if mlp.experts.wo_scale is not None:
                      mlp.experts.wo_scale.value = 1.0 / mlp.experts.wo_scale.value
+            
+            if hasattr(layer, "shared_experts") and layer.shared_experts is not None:
+                shared = layer.shared_experts
+                if hasattr(shared.gate_proj, "weight_scale") and shared.gate_proj.weight_scale is not None:
+                    shared.gate_proj.weight_scale.value = 1.0 / shared.gate_proj.weight_scale.value
+                if hasattr(shared.up_proj, "weight_scale") and shared.up_proj.weight_scale is not None:
+                    shared.up_proj.weight_scale.value = 1.0 / shared.up_proj.weight_scale.value
+                if hasattr(shared.down_proj, "weight_scale") and shared.down_proj.weight_scale is not None:
+                    shared.down_proj.weight_scale.value = 1.0 / shared.down_proj.weight_scale.value
         
         logger.info("Weights loaded and scales inverted successfully!")
 
@@ -895,17 +904,17 @@ class Glm5ForCausalLM(nnx.Module):
                     transpose=False,
                 )
                 if is_static_quant:
-                    mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale"] = WeightMapping(
+                    mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale_inv"] = WeightMapping(
                         target_path=f"{target_prefix}.shared_experts.gate_proj.weight_scale",
                         sharding=(None,),
                         transpose=False,
                     )
-                    mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale"] = WeightMapping(
+                    mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale_inv"] = WeightMapping(
                         target_path=f"{target_prefix}.shared_experts.up_proj.weight_scale",
                         sharding=(None,),
                         transpose=False,
                     )
-                    mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale"] = WeightMapping(
+                    mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale_inv"] = WeightMapping(
                         target_path=f"{target_prefix}.shared_experts.down_proj.weight_scale",
                         sharding=(None,),
                         transpose=False,
