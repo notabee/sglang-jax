@@ -6,7 +6,7 @@ from enum import Enum, IntEnum, auto
 import jax.numpy as jnp
 from transformers import PretrainedConfig
 
-from sgl_jax.srt.configs.quantization_config import QuantizationConfig
+from sgl_jax.srt.configs.quantization_config import QuantizationConfig, normalize_weight_block_size
 from sgl_jax.srt.hf_transformers_utils import (
     download_from_hf,
     get_config,
@@ -246,6 +246,8 @@ class ModelConfig:
 
             if quant_method == "fp8":
                 logger.info("Auto-detected FP8 model. Creating QuantizationConfig for static fp8.")
+                weight_block_size = hf_quant_config.get("weight_block_size")
+                weight_block_size = normalize_weight_block_size(weight_block_size)
                 quant_config = QuantizationConfig(
                     is_static_checkpoint=True,
                     linear_rules=[
@@ -257,6 +259,7 @@ class ModelConfig:
                     ],
                     moe_weight_dtype=jnp.float8_e4m3fn,
                     moe_activation_dtype=None,
+                    weight_block_size=weight_block_size,
                 )
                 return quant_config
 
