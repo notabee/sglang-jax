@@ -653,7 +653,7 @@ class Glm5ForCausalLM(nnx.Module):
                 target_path="lm_head.embedding", sharding=("tensor", None), transpose=False
             )
 
-        num_layers = 5 # For dummy testing
+        num_layers = self.config.num_hidden_layers
         first_k_dense_replace = getattr(self.config, "first_k_dense_replace", 0)
 
         quant_config = getattr(model_config, "quantization_config", None)
