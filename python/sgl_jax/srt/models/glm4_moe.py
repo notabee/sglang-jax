@@ -649,13 +649,13 @@ class Glm4MoeForCausalLM(nnx.Module):
                 )
         else:
             mappings[f"{prefix}.mlp.gate.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.moe_gate.kernel",
+                target_path=f"{target_prefix}.mlp.gate.weight",
                 sharding=(None, None),
                 transpose=True,
             )
             # GLM-4 uses e_score_correction_bias
             mappings[f"{prefix}.mlp.gate.e_score_correction_bias"] = WeightMapping(
-                target_path=f"{target_prefix}.moe_gate.bias", sharding=(None,)
+                target_path=f"{target_prefix}.mlp.gate.e_score_correction_bias", sharding=(None,)
             )
 
             num_logical_experts = self.config.n_routed_experts
@@ -751,17 +751,17 @@ class Glm4MoeForCausalLM(nnx.Module):
                 mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight"] = WeightMapping(
                     target_path=f"{target_prefix}.shared_experts.gate_proj.{w_name}",
                     sharding=(None, "tensor"),
-                    transpose=True,
+                    transpose=False,
                 )
                 mappings[f"{prefix}.mlp.shared_experts.up_proj.weight"] = WeightMapping(
                     target_path=f"{target_prefix}.shared_experts.up_proj.{w_name}",
                     sharding=(None, "tensor"),
-                    transpose=True,
+                    transpose=False,
                 )
                 mappings[f"{prefix}.mlp.shared_experts.down_proj.weight"] = WeightMapping(
                     target_path=f"{target_prefix}.shared_experts.down_proj.{w_name}",
                     sharding=("tensor", None),
-                    transpose=True,
+                    transpose=False,
                 )
                 if is_static_quant:
                     mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale"] = WeightMapping(
