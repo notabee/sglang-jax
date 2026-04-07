@@ -524,19 +524,21 @@ class Glm4MoeForCausalLM(nnx.Module):
             ),
         }
 
+        w_name = "weight_q" if is_static_quant else "weight"
+
         # Attention mappings (assuming merged QKV in checkpoint)
         mappings[f"{prefix}.attention.query_key_value.weight"] = WeightMapping(
             target_path=[
-                f"{target_prefix}.self_attn.q_proj.weight",
-                f"{target_prefix}.self_attn.k_proj.weight",
-                f"{target_prefix}.self_attn.v_proj.weight",
+                f"{target_prefix}.self_attn.q_proj.{w_name}",
+                f"{target_prefix}.self_attn.k_proj.{w_name}",
+                f"{target_prefix}.self_attn.v_proj.{w_name}",
             ],
             sharding=(None, "tensor"),
             transpose=True,
             kv_head_padding=True,
         )
         mappings[f"{prefix}.attention.dense.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.c_proj.weight",
+            target_path=f"{target_prefix}.self_attn.c_proj.{w_name}",
             sharding=("tensor", None),
             transpose=True,
         )
@@ -569,17 +571,17 @@ class Glm4MoeForCausalLM(nnx.Module):
 
         if is_mlp_layer:
             mappings[f"{prefix}.mlp.gate_proj.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.mlp.gate_proj.weight",
+                target_path=f"{target_prefix}.mlp.gate_proj.{w_name}",
                 sharding=(None, "tensor"),
                 transpose=True,
             )
             mappings[f"{prefix}.mlp.up_proj.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.mlp.up_proj.weight",
+                target_path=f"{target_prefix}.mlp.up_proj.{w_name}",
                 sharding=(None, "tensor"),
                 transpose=True,
             )
             mappings[f"{prefix}.mlp.down_proj.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.mlp.down_proj.weight",
+                target_path=f"{target_prefix}.mlp.down_proj.{w_name}",
                 sharding=("tensor", None),
                 transpose=True,
             )
@@ -701,17 +703,17 @@ class Glm4MoeForCausalLM(nnx.Module):
             num_shared = getattr(self.config, "n_shared_experts", 0)
             if num_shared > 0:
                 mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.gate_proj.weight",
+                    target_path=f"{target_prefix}.shared_experts.gate_proj.{w_name}",
                     sharding=(None, "tensor"),
                     transpose=True,
                 )
                 mappings[f"{prefix}.mlp.shared_experts.up_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.up_proj.weight",
+                    target_path=f"{target_prefix}.shared_experts.up_proj.{w_name}",
                     sharding=(None, "tensor"),
                     transpose=True,
                 )
                 mappings[f"{prefix}.mlp.shared_experts.down_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.down_proj.weight",
+                    target_path=f"{target_prefix}.shared_experts.down_proj.{w_name}",
                     sharding=("tensor", None),
                     transpose=True,
                 )
