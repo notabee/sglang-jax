@@ -507,7 +507,7 @@ class Glm5Model(nnx.Module):
                     dtype=dtype,
                     mesh=mesh,
                 )
-                for i in range(config.num_hidden_layers)
+                for i in range(60)
             ]
         )
 
@@ -653,7 +653,7 @@ class Glm5ForCausalLM(nnx.Module):
                 target_path="lm_head.embedding", sharding=("tensor", None), transpose=False
             )
 
-        num_layers = self.config.num_hidden_layers
+        num_layers = 60
         first_k_dense_replace = getattr(self.config, "first_k_dense_replace", 0)
 
         quant_config = getattr(model_config, "quantization_config", None)
