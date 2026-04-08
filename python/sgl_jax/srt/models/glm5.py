@@ -507,7 +507,7 @@ class Glm5Model(nnx.Module):
                     dtype=dtype,
                     mesh=mesh,
                 )
-                for i in range(config.num_hidden_layers)
+                for i in range(60)
             ]
         )
 
@@ -653,24 +653,26 @@ class Glm5ForCausalLM(nnx.Module):
                 target_path="lm_head.embedding", sharding=("tensor", None), transpose=False
             )
 
-        num_layers = self.config.num_hidden_layers
+        num_layers = 60
         first_k_dense_replace = getattr(self.config, "first_k_dense_replace", 0)
 
         quant_config = getattr(model_config, "quantization_config", None)
         is_static_quant = quant_config is not None and quant_config.is_static_checkpoint
 
+        hf_layer_indices = list(range(30)) + list(range(48, 78))
         for layer_idx in range(num_layers):
+            target_idx = hf_layer_indices[layer_idx]
             layer_mappings = self._create_moe_layer_mappings(
-                layer_idx, layer_idx < first_k_dense_replace, is_static_quant=is_static_quant
+                layer_idx, target_idx, target_idx < first_k_dense_replace, is_static_quant=is_static_quant
             )
             mappings.update(layer_mappings)
 
         return mappings
 
     def _create_moe_layer_mappings(
-        self, layer_idx: int, is_mlp_layer: bool, is_static_quant: bool = False
+        self, layer_idx: int, target_idx: int, is_mlp_layer: bool, is_static_quant: bool = False
     ) -> dict:
-        prefix = f"model.layers.{layer_idx}"
+        prefix = f"model.layers.{target_idx}"
         target_prefix = f"model.layers.{layer_idx}"
 
         mappings = {
