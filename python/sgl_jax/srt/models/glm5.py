@@ -676,13 +676,13 @@ class Glm5ForCausalLM(nnx.Module):
                 target_path="lm_head.embedding", sharding=("tensor", None), transpose=False
             )
 
-        num_layers = 78
+        num_layers = self.config.num_hidden_layers
         first_k_dense_replace = getattr(self.config, "first_k_dense_replace", 0)
 
         quant_config = getattr(model_config, "quantization_config", None)
         is_static_quant = quant_config is not None and quant_config.is_static_checkpoint
 
-        hf_layer_indices = list(range(78))
+        hf_layer_indices = list(range(num_layers))
         for layer_idx in range(num_layers):
             target_idx = hf_layer_indices[layer_idx]
             layer_mappings = self._create_moe_layer_mappings(
