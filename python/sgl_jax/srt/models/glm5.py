@@ -111,7 +111,7 @@ class Glm5Attention(nnx.Module):
 
         self.q_size = num_heads * self.head_dim
         self.kv_size = num_kv_heads * self.head_dim
-        self.scaling = self.head_dim**-0.5
+        self.scaling = 256**-0.5
 
         self.use_qk_norm = use_qk_norm
 
@@ -187,7 +187,7 @@ class Glm5Attention(nnx.Module):
             scope_name="indexer",
         )
         self.rotary_emb = RotaryEmbedding(
-            head_size=self.head_dim,
+            head_size=rotary_dim,
             rotary_dim=rotary_dim,
             max_position_embeddings=max_position_embeddings,
             base=rope_theta,
@@ -236,7 +236,10 @@ class Glm5Attention(nnx.Module):
             k_pe_repeated, NamedSharding(self.mesh, P(None, "tensor", None))
         )
         k = jnp.concatenate([k_nope, k_pe_repeated], axis=-1)
-        
+        if self.use_qk_norm:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
+
         # 4. Attention
         attn_output, kv_fused = self.attn(
             q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
@@ -561,7 +564,11 @@ class Glm5ForCausalLM(nnx.Module):
                 param_dtype=self.dtype,
                 kernel_axes=("tensor", None),
             )
-        self.logits_processor = LogitsProcessor(config.vocab_size, mesh=self.mesh)
+        self.logits_processor = LogitsProcessor(
+            config.vocab_size,
+            mesh=self.mesh,
+            soft_cap=getattr(config, "final_logit_softcapping", None),
+        )
 
     def __call__(
         self,
