@@ -524,6 +524,7 @@ class Glm5Model(nnx.Module):
         token_to_kv_pool: KVCache,
     ) -> jax.Array:
         hidden_states = self.embed_tokens(forward_batch.input_ids)
+        # jax.debug.print("DEBUG: After embed_tokens max: {x}", x=jnp.max(jnp.abs(hidden_states)))
         residual = None
         layers_kv_fused = []
         layers_topk_ids = []
@@ -538,6 +539,8 @@ class Glm5Model(nnx.Module):
             )
             layers_kv_fused.append(kv_fused)
             layers_topk_ids.append(topk_ids)
+            # if i == 30:
+            #     jax.debug.print("DEBUG: After layer 30 max: {x}", x=jnp.max(jnp.abs(hidden_states)))
 
         if residual is not None:
             hidden_states += residual
@@ -580,6 +583,8 @@ class Glm5ForCausalLM(nnx.Module):
             forward_batch,
             token_to_kv_pool,
         )
+        # jax.debug.print("DEBUG: Final hidden_states max: {x}", x=jnp.max(jnp.abs(hidden_states)))
+        # jax.debug.print("DEBUG: Final hidden_states max: {x}", x=jnp.max(jnp.abs(hidden_states)))
         if not getattr(self.config, "tie_word_embeddings", False):
             output = self.logits_processor(hidden_states, self.lm_head, logits_metadata)
         else:
@@ -615,6 +620,8 @@ class Glm5ForCausalLM(nnx.Module):
                     attn.indexer.wk.weight_scale.value = 1.0 / attn.indexer.wk.weight_scale.value
                 if hasattr(attn.indexer, "wq_b") and attn.indexer.wq_b.weight_scale is not None:
                     attn.indexer.wq_b.weight_scale.value = 1.0 / attn.indexer.wq_b.weight_scale.value
+                if hasattr(attn.indexer, "weights_proj") and attn.indexer.weights_proj.weight_scale is not None:
+                    attn.indexer.weights_proj.weight_scale.value = 1.0 / attn.indexer.weights_proj.weight_scale.value
             
             mlp = layer.mlp
             if hasattr(mlp, "gate_proj") and hasattr(mlp.gate_proj, "weight_scale"):
@@ -641,6 +648,15 @@ class Glm5ForCausalLM(nnx.Module):
                 if hasattr(shared.down_proj, "weight_scale") and shared.down_proj.weight_scale is not None:
                     shared.down_proj.weight_scale.value = 1.0 / shared.down_proj.weight_scale.value
         
+        # Invert scales for embed_tokens and lm_head
+        if hasattr(self.model.embed_tokens, "weight_scale") and self.model.embed_tokens.weight_scale is not None:
+            logger.info("Inverting embed_tokens scale...")
+            self.model.embed_tokens.weight_scale.value = 1.0 / self.model.embed_tokens.weight_scale.value
+        
+        if hasattr(self, "lm_head") and hasattr(self.lm_head, "weight_scale") and self.lm_head.weight_scale is not None:
+            logger.info("Inverting lm_head scale...")
+            self.lm_head.weight_scale.value = 1.0 / self.lm_head.weight_scale.value
+
         logger.info("Weights loaded and scales inverted successfully!")
 
     def _create_glm5_weight_mappings(self, model_config: ModelConfig) -> dict:
