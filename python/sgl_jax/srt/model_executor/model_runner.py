@@ -576,6 +576,13 @@ class ModelRunner(BaseModelRunner):
         cache_miss_count = 0
         import jax._src.test_util as jtu
 
+        print("="*20 + " MODEL INPUT " + "="*20)
+        for key, value in forward_batch.__dict__.items():
+            print(f"forward_batch {key}: {value}")
+        for key, value in logits_metadata.__dict__.items():
+            print(f"logits_metadata {key}: {value}")
+        print("="*50)
+
         for key, value in forward_batch.__dict__.items():
             if isinstance(value, jax.Array):
                 logger.debug(
@@ -605,6 +612,18 @@ class ModelRunner(BaseModelRunner):
                 forward_batch, logits_metadata
             )
             cache_miss_count = count()
+
+        print("="*20 + " MODEL OUTPUT " + "="*20)
+        print(f"output: {output}")
+        print("="*50)
+
+        print("="*20 + " KV CACHE FUSED SHAPES " + "="*20)
+        print(f"Num layers in layers_kv_fused: {len(layers_kv_fused)}")
+        if len(layers_kv_fused) > 0:
+            print(f"Shape of layer 0 KV cache: {layers_kv_fused[0].shape}")
+            print(f"Dtype of layer 0 KV cache: {layers_kv_fused[0].dtype}")
+        print("="*50)
+
         self._set_kv_cache_after_forward(layers_kv_fused)
 
         # layers_topk_ids required real_bs and original_input_len which could not be stored in ForwardBatch

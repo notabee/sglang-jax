@@ -421,6 +421,11 @@ class MHATokenToKVPool(KVCache):
         )
 
     def replace_kv_buffer(self, fused_kv_buffer: list[jax.Array]) -> None:
+        print("="*20 + " MHATokenToKVPool.replace_kv_buffer " + "="*20)
+        print(f"Num layers to replace: {len(fused_kv_buffer)}")
+        if len(fused_kv_buffer) > 0:
+            print(f"Buffer shape: {fused_kv_buffer[0].shape}")
+        print("="*50)
         self.kv_buffer[self.start_layer : self.start_layer + len(fused_kv_buffer)] = fused_kv_buffer
 
     def get_cpu_copy(self, indices):
@@ -585,6 +590,9 @@ class SWAKVPool(KVCache):
     def replace_kv_buffer(self, kv_buffer: list[jax.Array]):
         assert len(kv_buffer) == len(self.layers_mapping)
 
+        print("="*20 + " SWAKVPool.replace_kv_buffer " + "="*20)
+        print(f"Total layers to replace: {len(kv_buffer)}")
+
         full_kv_buffer = []
         swa_kv_buffer = []
         for layer_id, layer_kv_buffer in enumerate(kv_buffer):
@@ -593,6 +601,13 @@ class SWAKVPool(KVCache):
                 swa_kv_buffer.append(layer_kv_buffer)
             else:
                 full_kv_buffer.append(layer_kv_buffer)
+
+        print(f"SWA layers: {len(swa_kv_buffer)}, Full layers: {len(full_kv_buffer)}")
+        if len(swa_kv_buffer) > 0:
+            print(f"SWA buffer shape: {swa_kv_buffer[0].shape}")
+        if len(full_kv_buffer) > 0:
+            print(f"Full buffer shape: {full_kv_buffer[0].shape}")
+        print("="*50)
 
         self.swa_kv_pool.replace_kv_buffer(swa_kv_buffer)
         self.full_kv_pool.replace_kv_buffer(full_kv_buffer)

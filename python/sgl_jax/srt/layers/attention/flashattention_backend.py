@@ -151,6 +151,16 @@ class FlashAttention(AttentionBackend):
         else:
             raise ValueError(f"Invalid forward mode: {batch.forward_mode}")
 
+        print("="*20 + " ATTENTION METADATA " + "="*20)
+        print(f"batch.forward_mode: {batch.forward_mode}")
+        print(f"batch.seq_lens: {batch.seq_lens}")
+        print(f"batch.cache_loc: {batch.cache_loc}")
+        print(f"page_indices: {page_indices}")
+        print(f"cu_q_lens: {cu_q_lens}")
+        print(f"cu_kv_lens: {cu_kv_lens}")
+        print(f"distribution: {distribution}")
+        print("="*50)
+
         (
             metadata.num_seqs,
             metadata.cu_q_lens,
@@ -443,6 +453,12 @@ class FlashAttention(AttentionBackend):
             )
         else:
             kv_cache_fused = jnp.zeros((0, self.num_kv_heads * 2, self.head_dim), dtype=q.dtype)
+        
+        jax.debug.print("Layer {}: q shape={}, k shape={}, v shape={}, kv_cache_fused shape={}", 
+                        layer.layer_id, q.shape, k.shape, v.shape, kv_cache_fused.shape)
+        jax.debug.print("Layer {}: q_mean={}, k_mean={}, v_mean={}", 
+                        layer.layer_id, q.mean(), k.mean(), v.mean())
+
         scale = (
             1.0 / jnp.sqrt(layer.head_dim)
             if (layer is None or layer.scaling is None)

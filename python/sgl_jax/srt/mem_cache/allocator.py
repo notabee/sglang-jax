@@ -106,11 +106,17 @@ class TokenToKVPoolAllocator(BaseTokenToKVPoolAllocator):
         return len(self.free_slots)
 
     def alloc(self, need_size: int) -> np.ndarray | None:
+        print("="*20 + " TokenToKVPoolAllocator.alloc " + "="*20)
+        print(f"need_size: {need_size}")
         if need_size > self.available_size():
+            print("Allocation failed: not enough size")
+            print("="*50)
             return None
 
         select_index = self.free_slots[:need_size].copy()
         self.free_slots = self.free_slots[need_size:]
+        print(f"Allocated select_index shape: {select_index.shape}")
+        print("="*50)
         return select_index
 
     def free(self, free_index: np.ndarray):
@@ -176,6 +182,13 @@ class PagedTokenToKVPoolAllocator(BaseTokenToKVPoolAllocator):
         last_loc: list[int],
         extend_num_tokens: int,
     ) -> np.ndarray | None:
+        print("="*20 + " PagedTokenToKVPoolAllocator.alloc_extend " + "="*20)
+        print(f"prefix_lens: {prefix_lens}")
+        print(f"seq_lens: {seq_lens}")
+        print(f"last_loc: {last_loc}")
+        print(f"extend_num_tokens: {extend_num_tokens}")
+        print("="*50)
+
         # Convert to numpy for internal operations
         seq_lens_np = np.array(seq_lens)
         prefix_lens_np = np.array(prefix_lens)
@@ -268,6 +281,11 @@ class PagedTokenToKVPoolAllocator(BaseTokenToKVPoolAllocator):
         seq_lens: list[int],
         last_loc: list[int],
     ) -> np.ndarray | None:
+        print("="*20 + " PagedTokenToKVPoolAllocator.alloc_decode " + "="*20)
+        print(f"seq_lens: {seq_lens}")
+        print(f"last_loc: {last_loc}")
+        print("="*50)
+
         # Convert inputs to numpy for calculations
         seq_lens_np = np.array(seq_lens)
         last_loc_np = np.array(last_loc)
@@ -401,14 +419,22 @@ class SWATokenToKVPoolAllocator(BaseTokenToKVPoolAllocator):
         return self._kvcache
 
     def alloc(self, need_size: int):
+        print("="*20 + " SWATokenToKVPoolAllocator.alloc " + "="*20)
+        print(f"need_size: {need_size}")
         if need_size > self.full_attn_allocator.available_size():
+            print("Allocation failed: not enough full size")
+            print("="*50)
             return None
         if need_size > self.swa_attn_allocator.available_size():
+            print("Allocation failed: not enough swa size")
+            print("="*50)
             return None
 
         alloc_full_indices = self.full_attn_allocator.alloc(need_size)
         alloc_swa_indices = self.swa_attn_allocator.alloc(need_size)
         self.full_to_swa_index_mapping[alloc_full_indices] = alloc_swa_indices
+        print(f"Allocated alloc_full_indices shape: {alloc_full_indices.shape}")
+        print("="*50)
         return alloc_full_indices
 
     def free(self, free_index: np.array):
