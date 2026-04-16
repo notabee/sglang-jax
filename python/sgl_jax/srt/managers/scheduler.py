@@ -257,6 +257,8 @@ class Scheduler(
         if mesh is not None:
             self.mesh = mesh
         else:
+            print(f"[Mesh Debug] Total devices: {jax.device_count()}", flush=True)
+            print(f"[Mesh Debug] Local devices: {jax.local_device_count()}", flush=True)
             self.mesh = create_device_mesh(
                 ici_parallelism=[-1, self.tp_size],
                 dcn_parallelism=[1, 1],
