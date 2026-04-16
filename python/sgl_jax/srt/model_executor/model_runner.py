@@ -607,6 +607,36 @@ class ModelRunner(BaseModelRunner):
             cache_miss_count = count()
         self._set_kv_cache_after_forward(layers_kv_fused)
 
+        # Poison the unused slots in the last page to check for masking bugs
+        if forward_batch.forward_mode.is_decode():
+            req_indices = forward_batch.req_pool_indices.tolist()
+            seq_lens = forward_batch.seq_lens.tolist()
+
+            for i in range(forward_batch.batch_size):
+                req_idx = req_indices[i]
+                if req_idx == -1:
+                    continue
+                seq_len = seq_lens[i]
+
+                # Calculate the end of the allocated page
+                page_size = self.page_size
+                aligned_seq_len = ((seq_len + page_size - 1) // page_size) * page_size
+
+                # Get the indices of the unused slots in the last page
+                unused_slots = self.req_to_token_pool.req_to_token[req_idx, seq_len:aligned_seq_len].tolist()
+
+                # Fill those slots with NaN in the first layer's cache
+                if unused_slots:
+                    self.token_to_kv_pool.kv_buffer[0] = (
+                        self.token_to_kv_pool.kv_buffer[0]
+                        .at[unused_slots]
+                        .set(jnp.nan)
+                    )
+                    print(
+                        f"[Poison Test] Filled unused slots {unused_slots} with NaN for request {req_idx}",
+                        flush=True,
+                    )
+
         # layers_topk_ids required real_bs and original_input_len which could not be stored in ForwardBatch
         return output, cache_miss_count, layers_topk_ids
 
