@@ -257,11 +257,22 @@ class Scheduler(
         if mesh is not None:
             self.mesh = mesh
         else:
-            self.mesh = create_device_mesh(
-                ici_parallelism=[-1, self.tp_size],
-                dcn_parallelism=[1, 1],
-                device_indexes=server_args.device_indexes,
-            )
+            if self.nnodes > 1:
+                local_devices = len(jax.local_devices())
+                dcn_tp = self.tp_size // local_devices
+                ici_tp = local_devices
+                self.mesh = create_device_mesh(
+                    ici_parallelism=[-1, ici_tp],
+                    dcn_parallelism=[1, dcn_tp],
+                    device_indexes=server_args.device_indexes,
+                    num_slices=self.nnodes,
+                )
+            else:
+                self.mesh = create_device_mesh(
+                    ici_parallelism=[-1, self.tp_size],
+                    dcn_parallelism=[1, 1],
+                    device_indexes=server_args.device_indexes,
+                )
 
         if server_args.moe_backend == "fused":
             mesh_ep_size = self.mesh.shape.get("data", 1) * self.mesh.shape.get("tensor", 1)
