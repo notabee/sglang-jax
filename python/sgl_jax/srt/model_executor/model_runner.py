@@ -663,6 +663,21 @@ class ModelRunner(BaseModelRunner):
                 ctx = self.mesh
         with ctx:
             if forward_batch.forward_mode.is_decode() or forward_batch.forward_mode.is_extend():
+                print(f"[Prefill/Decode Flow] Step: {self.forward_pass_id} | Mode: {forward_batch.forward_mode.name}", flush=True)
+                req_indices = forward_batch.req_pool_indices.tolist()
+                seq_lens = forward_batch.seq_lens.tolist()
+                input_ids = forward_batch.input_ids.tolist()
+
+                if forward_batch.forward_mode.is_decode():
+                    for i in range(forward_batch.batch_size):
+                        req_idx = req_indices[i]
+                        seq_len = seq_lens[i]
+                        current_token = input_ids[i] if i < len(input_ids) else "N/A"
+                        attending_slots = self.req_to_token_pool.req_to_token[req_idx, :seq_len].tolist()
+                        print(f"  -> Request Slot {req_idx} | Current Token: {current_token} | Attending Slots: {attending_slots}", flush=True)
+                else:
+                    print(f"  -> Req Slots: {req_indices} | Seq Lens: {seq_lens} | Current Inputs: {input_ids} | Attending: All prompt tokens", flush=True)
+                
                 ret = self._forward(forward_batch, logits_metadata)
             elif forward_batch.forward_mode.is_idle():
                 ret = self.forward_idle(forward_batch, logits_metadata)

@@ -459,6 +459,14 @@ class FlashAttention(AttentionBackend):
             causal = 0
         # Select page indices and remap to SWA pool if KV cache supports it
         page_indices_arg = self.forward_metadata.page_indices
+        if layer.layer_id == 0:
+            jax.debug.print(
+                "[JIT Attention] Page Indices: {p} | Seq Lens: {s} | cu_q: {cq} | cu_kv: {ckv}",
+                p=page_indices_arg,
+                s=self.forward_metadata.seq_lens,
+                cq=self.forward_metadata.cu_q_lens,
+                ckv=self.forward_metadata.cu_kv_lens,
+            )
         if hasattr(token_to_kv_pool, "remap_cache_loc") and self.page_size == 1:
             page_indices_arg = token_to_kv_pool.remap_cache_loc(page_indices_arg, layer.layer_id)
 
