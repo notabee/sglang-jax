@@ -623,13 +623,13 @@ class ModelRunner(BaseModelRunner):
                 aligned_seq_len = ((seq_len + page_size - 1) // page_size) * page_size
 
                 # Get the indices of the unused slots in the last page
-                unused_slots = self.req_to_token_pool.req_to_token[req_idx, seq_len:aligned_seq_len].tolist()
+                unused_slots = self.req_to_token_pool.req_to_token[req_idx, seq_len:aligned_seq_len]
 
                 # Fill those slots with NaN in the first layer's cache
-                if unused_slots:
+                if len(unused_slots) > 0:
                     self.token_to_kv_pool.kv_buffer[0] = (
                         self.token_to_kv_pool.kv_buffer[0]
-                        .at[unused_slots]
+                        .at[jnp.array(unused_slots)]
                         .set(jnp.nan)
                     )
                     print(
