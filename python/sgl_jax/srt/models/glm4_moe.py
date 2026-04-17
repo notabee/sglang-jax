@@ -257,11 +257,11 @@ class Glm4MoeDecoderLayer(nnx.Module):
             )
 
             self.moe_backend = getattr(config, "moe_backend", MoEBackend.EPMOE)
-            self.use_fused = False # Force non-fused EPMoE to debug NaNs
+            self.use_fused = self.moe_backend == MoEBackend.FUSED
 
             self.topk = TopK(
                 topk=config.num_experts_per_tok,
-                renormalize=False, # Force False to debug
+                renormalize=config.norm_topk_prob,
                 num_expert_group=getattr(config, "n_group", 1),
                 topk_group=getattr(config, "topk_group", 1),
                 routed_scaling_factor=getattr(config, "routed_scaling_factor", 1.0),
@@ -362,8 +362,10 @@ class Glm4MoeDecoderLayer(nnx.Module):
                 shared_output = None
             router_logits = self.moe_gate(hidden_states)
 
+            correction_bias = self.moe_gate.bias.value if self.moe_gate.bias is not None else None
             topk_weights, topk_ids = self.topk(
                 router_logits,
+                correction_bias,
                 dispatch_info=dispatch_info,
             )
 
