@@ -304,8 +304,6 @@ class SchedulerOutputProcessorMixin:
                     text_val = req.tokenizer.decode([int(next_token_id)])
                 except Exception:
                     text_val = "Invalid"
-                if len(req.output_ids) <= 10:
-                    print(f"[DEBUG DECODE GENERATE] Req: {req.rid} | Token: {next_token_id} ('{text_val}') | PoolIdx: {req.req_pool_idx}")
             elif self.spec_algorithm.is_eagle():
                 req.output_ids.extend(next_token_id)
                 new_accepted_len = len(next_token_id)
