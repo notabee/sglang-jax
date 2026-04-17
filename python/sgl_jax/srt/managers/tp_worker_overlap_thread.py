@@ -133,6 +133,14 @@ class ModelWorkerClient:
                     print(f"[DEBUG KV VALS] Step {self.debug_print_count} | Locs: {indices} | K[0,:5] (Req 0): {k_host[0, 0, :5]} | K[1,:5] (Req 1): {k_host[1, 0, :5]}")
                 except Exception as e:
                     print(f"[DEBUG KV VALS] Error fetching cache: {e}")
+                
+                try:
+                    # Inspect embedding for token 0
+                    embed_tokens = self.worker.model_runner.model.embed_tokens
+                    embedding_val = jax.device_get(embed_tokens.embedding.value[0])
+                    print(f"[DEBUG EMBEDDING 0] Step {self.debug_print_count} | Token 0 Embedding[:5]: {embedding_val[:5]}")
+                except Exception as e:
+                    print(f"[DEBUG EMBEDDING 0] Error fetching embedding: {e}")
 
             # Update the future token ids map
             self.future_token_ids_map = set_future_token_ids(
