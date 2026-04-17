@@ -107,7 +107,7 @@ class SchedulerOutputProcessorMixin:
                     text_val = req.tokenizer.decode([int(next_token_id)])
                 except Exception:
                     text_val = "Invalid"
-                print(f"[DEBUG] Prefill generated token: {next_token_id} ('{text_val}') for req: {req.rid} (pool_idx: {req.req_pool_idx})")
+                print(f"[DEBUG PREFILL GENERATE] Req: {req.rid} | Token: {next_token_id} ('{text_val}') | PoolIdx: {req.req_pool_idx}")
                 req.check_finished()
 
                 if req.finished():
@@ -304,7 +304,7 @@ class SchedulerOutputProcessorMixin:
                     text_val = req.tokenizer.decode([int(next_token_id)])
                 except Exception:
                     text_val = "Invalid"
-                print(f"[DEBUG] Decode generated token: {next_token_id} ('{text_val}') for req: {req.rid} (pool_idx: {req.req_pool_idx})")
+                print(f"[DEBUG DECODE GENERATE] Req: {req.rid} | Token: {next_token_id} ('{text_val}') | PoolIdx: {req.req_pool_idx}")
             elif self.spec_algorithm.is_eagle():
                 req.output_ids.extend(next_token_id)
                 new_accepted_len = len(next_token_id)

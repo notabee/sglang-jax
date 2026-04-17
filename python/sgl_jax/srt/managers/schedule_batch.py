@@ -1050,7 +1050,7 @@ class ScheduleBatch:
                 text_val = req.tokenizer.decode([int(token_id)])
             except Exception:
                 text_val = "Invalid"
-            print(f"[DEBUG] Decode consuming token: {token_id} ('{text_val}') for req: {req.rid}")
+            print(f"[DEBUG DECODE CONSUME] Req: {req.rid} | Token: {token_id} ('{text_val}')")
 
         self.output_ids = None
 
