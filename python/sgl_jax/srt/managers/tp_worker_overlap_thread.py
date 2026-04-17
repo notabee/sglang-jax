@@ -108,7 +108,7 @@ class ModelWorkerClient:
             model_worker_batch.forward_batch.input_ids = resolve_future_token_ids(
                 input_ids, self.future_token_ids_map
             )
-            if self.debug_print_count < 10:
+            if self.debug_print_count < 1:
                 print(f"[DEBUG DECODE CONSUME RESOLVED] Token IDs: {model_worker_batch.forward_batch.input_ids}")
                 self.debug_print_count += 1
 
