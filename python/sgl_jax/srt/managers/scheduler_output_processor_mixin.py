@@ -300,12 +300,11 @@ class SchedulerOutputProcessorMixin:
             new_accepted_len = 1
             if batch.spec_algorithm is None or batch.spec_algorithm.is_none():
                 req.output_ids.append(next_token_id)
-                if len(req.output_ids) == 2:
-                    try:
-                        text_val = req.tokenizer.decode([int(next_token_id)])
-                    except Exception:
-                        text_val = "Invalid"
-                    print(f"[DEBUG] Decode generated token: {next_token_id} ('{text_val}') for req: {req.rid} (pool_idx: {req.req_pool_idx})")
+                try:
+                    text_val = req.tokenizer.decode([int(next_token_id)])
+                except Exception:
+                    text_val = "Invalid"
+                print(f"[DEBUG] Decode generated token: {next_token_id} ('{text_val}') for req: {req.rid} (pool_idx: {req.req_pool_idx})")
             elif self.spec_algorithm.is_eagle():
                 req.output_ids.extend(next_token_id)
                 new_accepted_len = len(next_token_id)
