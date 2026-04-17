@@ -293,8 +293,7 @@ class ModelWorker:
                         future_token_ids_map,
                     )
 
-                with self.mesh:
-                    self.forward_batch_generation(model_worker_batch, None, False, sampling_metadata)
+                self.forward_batch_generation(model_worker_batch, None, False, sampling_metadata)
         end_time = time.perf_counter()
         logger.info("[EXTEND] Precompile finished in %.0f secs", end_time - start_time)
 
