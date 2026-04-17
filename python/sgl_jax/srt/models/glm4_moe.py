@@ -261,7 +261,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
 
             self.topk = TopK(
                 topk=config.num_experts_per_tok,
-                renormalize=config.norm_topk_prob,
+                renormalize=False, # Force False to debug
                 num_expert_group=getattr(config, "n_group", 1),
                 topk_group=getattr(config, "topk_group", 1),
                 routed_scaling_factor=getattr(config, "routed_scaling_factor", 1.0),
