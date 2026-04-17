@@ -141,25 +141,6 @@ class Glm4MoeAttention(nnx.Module):
             k = self.k_norm(k)
 
         q, k = self.rotary_emb(positions, q, k)
-
-        from sgl_jax.srt.model_executor.forward_batch_info import ForwardMode
-
-        def _print_qkv(q, k, v, mode):
-            # Print a small slice to avoid flooding the screen
-            jax.debug.print("[DEBUG] {mode} Q[0, 0, :5]: {q_slice}", mode=mode, q_slice=q[0, 0, :5])
-            jax.debug.print("[DEBUG] {mode} K[0, 0, :5]: {k_slice}", mode=mode, k_slice=k[0, 0, :5])
-            jax.debug.print("[DEBUG] {mode} V[0, 0, :5]: {v_slice}", mode=mode, v_slice=v[0, 0, :5])
-
-        mode_str = "Decode" if forward_batch.forward_mode == ForwardMode.DECODE else "Prefill"
-        
-        # Print shapes
-        jax.debug.print("[DEBUG] {mode} QKV shape: Q={q_shape}, K={k_shape}, V={v_shape}", 
-                        mode=mode_str, q_shape=q.shape, k_shape=k.shape, v_shape=v.shape)
-        
-        jax.debug.print("[DEBUG] {mode} req_pool_indices: {indices}", mode=mode_str, indices=forward_batch.req_pool_indices)
-        
-        _print_qkv(q, k, v, mode_str)
-
         attn_output, kv_fused = self.attn(
             q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
         )
