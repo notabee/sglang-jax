@@ -257,7 +257,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
             )
 
             self.moe_backend = getattr(config, "moe_backend", MoEBackend.EPMOE)
-            self.use_fused = self.moe_backend == MoEBackend.FUSED
+            self.use_fused = False # Force non-fused EPMoE to debug NaNs
 
             self.topk = TopK(
                 topk=config.num_experts_per_tok,
