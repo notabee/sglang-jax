@@ -1070,6 +1070,7 @@ class ScheduleBatch:
                 self.seq_lens.tolist(),
                 last_loc.tolist(),
             )
+        print(f"[DEBUG KV LOCS] Req Pool Indices: {self.req_pool_indices}, Cache Locs: {self.out_cache_loc}")
         self.req_to_token_pool.write(
             (self.req_pool_indices, locs), self.out_cache_loc.astype(np.int32)
         )
