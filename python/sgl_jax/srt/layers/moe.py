@@ -546,7 +546,7 @@ class EPMoE(nnx.Module):
             return jnp.zeros((0, wo_kernel.shape[-1]), dtype=x.dtype)
 
         group_sizes = group_sizes.astype(jnp.int32)
-        act_q_dtype = self.activation_quantized_dtype
+        act_q_dtype = None
 
         gmm_kwargs = dict(
             group_sizes=group_sizes,
