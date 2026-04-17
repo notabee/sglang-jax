@@ -56,7 +56,7 @@ class Glm4MoeAttention(nnx.Module):
         self.kv_size = num_kv_heads * self.head_dim
         self.scaling = self.head_dim**-0.5
 
-        self.use_qk_norm = use_qk_norm
+        self.use_qk_norm = False
 
         if use_qk_norm:
             self.q_norm = RMSNorm(
