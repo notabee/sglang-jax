@@ -103,6 +103,7 @@ class SchedulerOutputProcessorMixin:
             if req.is_chunked <= 0:
                 # req output_ids are set here
                 req.output_ids.append(next_token_id)
+                print(f"[DEBUG] Prefill generated token: {next_token_id} for req: {req.rid}")
                 req.check_finished()
 
                 if req.finished():
@@ -295,6 +296,8 @@ class SchedulerOutputProcessorMixin:
             new_accepted_len = 1
             if batch.spec_algorithm is None or batch.spec_algorithm.is_none():
                 req.output_ids.append(next_token_id)
+                if len(req.output_ids) == 2:
+                    print(f"[DEBUG] Decode generated token: {next_token_id} for req: {req.rid}")
             elif self.spec_algorithm.is_eagle():
                 req.output_ids.extend(next_token_id)
                 new_accepted_len = len(next_token_id)

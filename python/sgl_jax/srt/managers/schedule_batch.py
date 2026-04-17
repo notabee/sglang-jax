@@ -1044,6 +1044,9 @@ class ScheduleBatch:
 
         # Update fields
         self.input_ids = self.output_ids
+        for i, req in enumerate(self.reqs):
+            if len(req.output_ids) == 1:
+                print(f"[DEBUG] Decode consuming token: {self.input_ids[i]} for req: {req.rid}")
 
         self.output_ids = None
 
