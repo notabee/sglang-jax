@@ -1,6 +1,8 @@
 """Launch the inference server."""
 
 import os
+import jax
+jax.config.update("jax_disable_jit", True)
 
 from sgl_jax.srt.entrypoints import http_server
 from sgl_jax.srt.server_args import ServerArgs
