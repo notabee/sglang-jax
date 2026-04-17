@@ -368,6 +368,14 @@ class Glm4MoeDecoderLayer(nnx.Module):
                 correction_bias,
                 dispatch_info=dispatch_info,
             )
+            
+            if self.is_moe_layer and self.layer_id == getattr(self.config, "first_k_dense_replace", 0):
+                def _print_moe(logits, weights, ids):
+                    print(f"[DEBUG MoE] Layer {self.layer_id} | logits[0, :5]: {logits[0, :5]}")
+                    print(f"[DEBUG MoE] Layer {self.layer_id} | weights[0]: {weights[0]}")
+                    print(f"[DEBUG MoE] Layer {self.layer_id} | ids[0]: {ids[0]}")
+                
+                jax.debug.callback(_print_moe, router_logits, topk_weights, topk_ids)
 
             hidden_states = self.mlp(hidden_states, topk_weights, topk_ids)
 

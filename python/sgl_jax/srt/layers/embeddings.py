@@ -220,6 +220,14 @@ class RotaryEmbedding:
     ) -> tuple[jax.Array, jax.Array]:
         positions = positions.flatten()  # [num_tokens]
 
+        def _cb(pos_np, q_np):
+            # Only print for the first few tokens to avoid flooding
+            print(f"[DEBUG RoPE] positions: {pos_np[:2]}")
+            print(f"[DEBUG RoPE] query shape: {q_np.shape}")
+            print(f"[DEBUG RoPE] query slice[0, 0, :5]: {q_np[0, 0, :5]}")
+            
+        jax.debug.callback(_cb, positions, query)
+
         inv_freq = jnp.asarray(self._inv_freq_np, dtype=self.dtype)
 
         # Compute freqs = positions * inv_freq
