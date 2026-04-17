@@ -150,7 +150,7 @@ class Glm4MoeAttention(nnx.Module):
             jax.debug.print("[DEBUG] {mode} K[0, 0, :5]: {k_slice}", mode=mode, k_slice=k[0, 0, :5])
             jax.debug.print("[DEBUG] {mode} V[0, 0, :5]: {v_slice}", mode=mode, v_slice=v[0, 0, :5])
 
-        mode_str = jax.lax.select(forward_batch.forward_mode == ForwardMode.DECODE, "Decode", "Prefill")
+        mode_str = "Decode" if forward_batch.forward_mode == ForwardMode.DECODE else "Prefill"
         
         # Print shapes
         jax.debug.print("[DEBUG] {mode} QKV shape: Q={q_shape}, K={k_shape}, V={v_shape}", 
