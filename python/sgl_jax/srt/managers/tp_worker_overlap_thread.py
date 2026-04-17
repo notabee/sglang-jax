@@ -58,6 +58,7 @@ class ModelWorkerClient:
         )
         self.forward_thread.start()
         self.parent_process = psutil.Process().parent()
+        self.debug_print_count = 0
 
     def get_model_runner(self):
         return self.worker.get_model_runner()
@@ -107,6 +108,9 @@ class ModelWorkerClient:
             model_worker_batch.forward_batch.input_ids = resolve_future_token_ids(
                 input_ids, self.future_token_ids_map
             )
+            if self.debug_print_count < 10:
+                print(f"[DEBUG DECODE CONSUME RESOLVED] Token IDs: {model_worker_batch.forward_batch.input_ids}")
+                self.debug_print_count += 1
 
             # Run forward
             with jax.profiler.TraceAnnotation(f"forward_batch_generation {model_worker_batch.bid}"):
