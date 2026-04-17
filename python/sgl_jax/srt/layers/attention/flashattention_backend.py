@@ -458,8 +458,7 @@ class FlashAttention(AttentionBackend):
         if self.forward_metadata.custom_mask is not None:
             causal = 0
         
-        jax.debug.print("[DEBUG FLASH ATTN] causal={causal}, custom_mask is None: {mask_is_none}", 
-                        causal=causal, mask_is_none=self.forward_metadata.custom_mask is None)
+
 
         # Select page indices and remap to SWA pool if KV cache supports it
         page_indices_arg = self.forward_metadata.page_indices

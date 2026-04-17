@@ -1045,12 +1045,13 @@ class ScheduleBatch:
         # Update fields
         self.input_ids = self.output_ids
         for i, req in enumerate(self.reqs):
-            token_id = self.input_ids[i]
-            try:
-                text_val = req.tokenizer.decode([int(token_id)])
-            except Exception:
-                text_val = "Invalid"
-            print(f"[DEBUG DECODE CONSUME] Req: {req.rid} | Token: {token_id} ('{text_val}')")
+            if len(req.output_ids) <= 5:
+                token_id = self.input_ids[i]
+                try:
+                    text_val = req.tokenizer.decode([int(token_id)])
+                except Exception:
+                    text_val = "Invalid"
+                print(f"[DEBUG DECODE CONSUME] Req: {req.rid} | Token: {token_id} ('{text_val}')")
 
         self.output_ids = None
 

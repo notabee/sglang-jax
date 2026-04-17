@@ -27,6 +27,8 @@ from sgl_jax.srt.utils.weight_utils import WeightLoader, WeightMapping
 
 logger = logging.getLogger(__name__)
 
+_decode_print_counter = 0
+
 class Glm4MoeAttention(nnx.Module):
     def __init__(
         self,
@@ -141,6 +143,16 @@ class Glm4MoeAttention(nnx.Module):
             k = self.k_norm(k)
 
         q, k = self.rotary_emb(positions, q, k)
+
+        global _decode_print_counter
+        if self.layer_id == 0 and forward_batch.forward_mode == ForwardMode.DECODE:
+            def _cb(q_np):
+                global _decode_print_counter
+                if _decode_print_counter < 2:
+                    print(f"[DEBUG QKV] Layer 0 | Q[0, 0, :5]: {q_np[0, 0, :5]}")
+                    _decode_print_counter += 1
+            jax.debug.callback(_cb, q)
+
         attn_output, kv_fused = self.attn(
             q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
         )
@@ -370,13 +382,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
                 dispatch_info=dispatch_info,
             )
             
-            if self.is_moe_layer and self.layer_id == self.first_k_dense_replace:
-                def _print_moe(logits, weights, ids):
-                    print(f"[DEBUG MoE] Layer {self.layer_id} | logits[0, :5]: {logits[0, :5]}")
-                    print(f"[DEBUG MoE] Layer {self.layer_id} | weights[0]: {weights[0]}")
-                    print(f"[DEBUG MoE] Layer {self.layer_id} | ids[0]: {ids[0]}")
-                
-                jax.debug.callback(_print_moe, router_logits, topk_weights, topk_ids)
+
 
             hidden_states = self.mlp(hidden_states, topk_weights, topk_ids)
 

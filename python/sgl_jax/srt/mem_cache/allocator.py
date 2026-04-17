@@ -259,7 +259,7 @@ class PagedTokenToKVPoolAllocator(BaseTokenToKVPoolAllocator):
                 )
                 current_output_idx += remaining_tokens
                 page_idx += 1
-            print(f"[DEBUG KV ALLOC PREFILL] SeqIdx: {seq_idx} | Indices: {out_indices[start_idx : current_output_idx]}")
+
         # page_idx is the number of new pages allocated
         total_new_pages = page_idx
         self.free_pages = self.free_pages[total_new_pages:]
@@ -309,7 +309,7 @@ class PagedTokenToKVPoolAllocator(BaseTokenToKVPoolAllocator):
             else:
                 # Sequence continues in current page - allocate next position
                 out_indices[seq_idx] = last_loc_np[seq_idx] + 1
-            print(f"[DEBUG KV ALLOC DECODE] SeqIdx: {seq_idx} | Index: {out_indices[seq_idx]}")
+
 
         # page_idx is the number of new pages allocated
         total_new_pages = page_idx
