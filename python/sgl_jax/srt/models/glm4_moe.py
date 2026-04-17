@@ -22,7 +22,7 @@ from sgl_jax.srt.layers.moe import (
 )
 from sgl_jax.srt.layers.radix_attention import RadixAttention
 from sgl_jax.srt.mem_cache.memory_pool import KVCache
-from sgl_jax.srt.model_executor.forward_batch_info import ForwardBatch, ForwardMode
+from sgl_jax.srt.model_executor.forward_batch_info import ForwardBatch
 from sgl_jax.srt.utils.weight_utils import WeightLoader, WeightMapping
 
 logger = logging.getLogger(__name__)
@@ -141,10 +141,6 @@ class Glm4MoeAttention(nnx.Module):
             k = self.k_norm(k)
 
         q, k = self.rotary_emb(positions, q, k)
-
-        if self.layer_id == 0 and forward_batch.forward_mode == ForwardMode.DECODE:
-            jax.debug.print("[DEBUG QKV] Layer 0 | Q[0, :8, :5]: {q_slice}", q_slice=q[0, :8, :3])
-
         attn_output, kv_fused = self.attn(
             q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
         )
@@ -260,8 +256,8 @@ class Glm4MoeDecoderLayer(nnx.Module):
                 score_func=getattr(config, "scoring_func", "sigmoid"),
             )
 
-            self.moe_backend = getattr(config, "moe_backend", "epmoe")
-            self.use_fused = False
+            self.moe_backend = getattr(config, "moe_backend", MoEBackend.EPMOE)
+            self.use_fused = self.moe_backend == MoEBackend.FUSED
 
             self.topk = TopK(
                 topk=config.num_experts_per_tok,
@@ -279,7 +275,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
                     num_experts_per_tok=config.num_experts_per_tok,
                     intermediate_dim=config.moe_intermediate_size,
                     mesh=mesh,
-                    ep_size=getattr(config, "ep_size", 1),
+                    ep_size=1, # Default to 1 for now
                     weight_dtype=dtype,
                     dtype=dtype,
                     layer_id=layer_id,
@@ -299,7 +295,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
                     num_experts_per_tok=config.num_experts_per_tok,
                     intermediate_dim=config.moe_intermediate_size,
                     mesh=mesh,
-                    ep_size=getattr(config, "ep_size", 1),
+                    ep_size=1, # Default to 1 for now
                     weight_dtype=dtype,
                     dtype=dtype,
                     layer_id=layer_id,
@@ -372,8 +368,6 @@ class Glm4MoeDecoderLayer(nnx.Module):
                 correction_bias,
                 dispatch_info=dispatch_info,
             )
-            
-
 
             hidden_states = self.mlp(hidden_states, topk_weights, topk_ids)
 
