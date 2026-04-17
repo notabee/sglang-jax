@@ -124,6 +124,15 @@ class ModelWorkerClient:
                 )
             if self.debug_print_count < 5:
                 print(f"[DEBUG LOGITS] Max: {jnp.max(logits_output.next_token_logits)}, Min: {jnp.min(logits_output.next_token_logits)}")
+                try:
+                    # Inspect the slots allocated for this batch
+                    indices = model_worker_batch.out_cache_loc
+                    kv_cache_host = self.worker.model_runner.token_to_kv_pool.get_cpu_copy(indices)
+                    # kv_cache_host[0] is [k_host, v_host] for Layer 0
+                    k_host = kv_cache_host[0][0]
+                    print(f"[DEBUG KV VALS] Step {self.debug_print_count} | Locs: {indices} | K[0,:5] (Req 0): {k_host[0, 0, :5]} | K[1,:5] (Req 1): {k_host[1, 0, :5]}")
+                except Exception as e:
+                    print(f"[DEBUG KV VALS] Error fetching cache: {e}")
 
             # Update the future token ids map
             self.future_token_ids_map = set_future_token_ids(
