@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import heapq
-import threading
 import time
 from collections import defaultdict
 from collections.abc import Iterator
@@ -169,7 +168,6 @@ class RadixCache(BasePrefixCache):
         else:
             self.key_match_fn = partial(_key_match_paged, page_size=page_size)
             self.get_child_key_fn = partial(get_child_key, page_size=page_size)
-        self.lock = threading.Lock()
         self.reset()
 
     def _create_tokens_data(self, tokens: list[int]) -> np.ndarray:
@@ -187,186 +185,182 @@ class RadixCache(BasePrefixCache):
         self.protected_size_ = 0
 
     def match_prefix(self, key: RadixKey | list[int], **kwargs) -> MatchResult:
-        with self.lock:
-            # Support both RadixKey and plain list for backward compatibility
-            if not isinstance(key, RadixKey):
-                extra_key = kwargs.get("extra_key")
-                key = RadixKey(key, extra_key)
-    
-            if self.disable or len(key) == 0:
-                empty_array = np.empty((0,), dtype=np.int32)
-    
-                return MatchResult(
-                    device_indices=empty_array,
-                    last_device_node=self.root_node,
-                    last_host_node=self.root_node,
-                    host_hit_length=0,
-                )
-    
-            # Convert and align key
-            converted_key = RadixKey(self.key_convert_fn(key.token_ids), key.extra_key)
-    
-            if self.page_size != 1:
-                page_aligned_len = len(converted_key) // self.page_size * self.page_size
-                converted_key = converted_key[:page_aligned_len]
-    
-            token_sequences, last_node = self._match_prefix_helper(self.root_node, converted_key)
-    
-            if token_sequences:
-                valid_tokens = []
-                for tokens in token_sequences:
-                    if tokens is not None and len(tokens) > 0:
-                        if isinstance(tokens, (list, tuple)):
-                            valid_tokens.extend(tokens)
-                        elif isinstance(tokens, np.ndarray):
-                            valid_tokens.extend(tokens.tolist())
-    
-                if valid_tokens:
-                    matched_tokens = np.array(valid_tokens, dtype=np.int32)
-                else:
-                    matched_tokens = np.empty((0,), dtype=np.int32)
-            else:
-                matched_tokens = np.empty((0,), dtype=np.int32)
-    
+        # Support both RadixKey and plain list for backward compatibility
+        if not isinstance(key, RadixKey):
+            extra_key = kwargs.get("extra_key")
+            key = RadixKey(key, extra_key)
+
+        if self.disable or len(key) == 0:
+            empty_array = np.empty((0,), dtype=np.int32)
+
             return MatchResult(
-                device_indices=matched_tokens,
-                last_device_node=last_node,
-                last_host_node=last_node,
+                device_indices=empty_array,
+                last_device_node=self.root_node,
+                last_host_node=self.root_node,
                 host_hit_length=0,
             )
 
+        # Convert and align key
+        converted_key = RadixKey(self.key_convert_fn(key.token_ids), key.extra_key)
+
+        if self.page_size != 1:
+            page_aligned_len = len(converted_key) // self.page_size * self.page_size
+            converted_key = converted_key[:page_aligned_len]
+
+        token_sequences, last_node = self._match_prefix_helper(self.root_node, converted_key)
+
+        if token_sequences:
+            valid_tokens = []
+            for tokens in token_sequences:
+                if tokens is not None and len(tokens) > 0:
+                    if isinstance(tokens, (list, tuple)):
+                        valid_tokens.extend(tokens)
+                    elif isinstance(tokens, np.ndarray):
+                        valid_tokens.extend(tokens.tolist())
+
+            if valid_tokens:
+                matched_tokens = np.array(valid_tokens, dtype=np.int32)
+            else:
+                matched_tokens = np.empty((0,), dtype=np.int32)
+        else:
+            matched_tokens = np.empty((0,), dtype=np.int32)
+
+        return MatchResult(
+            device_indices=matched_tokens,
+            last_device_node=last_node,
+            last_host_node=last_node,
+            host_hit_length=0,
+        )
+
     def insert(self, key: RadixKey | list, value=None):
-        with self.lock:
-            if self.disable:
-                return 0
-    
-            # Support both RadixKey and plain list for backward compatibility
-            if not isinstance(key, RadixKey):
-                key = RadixKey(key, None)
-    
-            # Convert key
-            converted_key = RadixKey(self.key_convert_fn(key.token_ids), key.extra_key)
-    
-            if value is None:
-                value = self._create_tokens_data(converted_key.token_ids)
-            elif isinstance(value, list):
-                value = self._create_tokens_data(value)
-    
-            if self.is_eagle:
-                # Make sure the value len equal to the EAGLE bigram key len
-                value = value[: len(converted_key)]
-    
-            return self._insert_helper(self.root_node, converted_key, value)
+        if self.disable:
+            return 0
+
+        # Support both RadixKey and plain list for backward compatibility
+        if not isinstance(key, RadixKey):
+            key = RadixKey(key, None)
+
+        # Convert key
+        converted_key = RadixKey(self.key_convert_fn(key.token_ids), key.extra_key)
+
+        if value is None:
+            value = self._create_tokens_data(converted_key.token_ids)
+        elif isinstance(value, list):
+            value = self._create_tokens_data(value)
+
+        if self.is_eagle:
+            # Make sure the value len equal to the EAGLE bigram key len
+            value = value[: len(converted_key)]
+
+        return self._insert_helper(self.root_node, converted_key, value)
 
     def cache_finished_req(self, req: Req):
-        with self.lock:
-            """Cache completed requests"""
-            all_token_len = len(req.origin_input_ids) + max(len(req.output_ids) - 1, 0)
-            if self.disable:
-                kv_indices = self.req_to_token_pool.read(
-                    req.req_pool_idx,
-                    all_token_len,
-                )
-                kv_indices = kv_indices[kv_indices != 0]
-                self.token_to_kv_pool_allocator.free(kv_indices)
-                self.req_to_token_pool.free(req.req_pool_idx)
-                return
-    
-            token_ids = (req.origin_input_ids + req.output_ids)[:all_token_len]
-            # For EAGLE radix cache, we will convert the key to bigram key, e.g. [1,2,3,4] -> [(1,2), (2,3), (3,4)], the length will -1. ((len([(1,2), (2,3), (3,4)]) = len([1,2,3,4]) - 1))
-            # So for the corresponding kv length should also -1. Then we get the actual_kv_len, and use it to do later calculation and slicing.
-            actual_kv_len = all_token_len - 1 if self.is_eagle else all_token_len
-            kv_indices = self.req_to_token_pool.read(req.req_pool_idx, all_token_len)
-            kv_indices = kv_indices[kv_indices != 0]
-    
-            if self.page_size != 1:
-                page_aligned_len = actual_kv_len // self.page_size * self.page_size
-                page_aligned_kv_indices = kv_indices[:page_aligned_len].copy()
-                self.token_to_kv_pool_allocator.free(kv_indices[page_aligned_len:])
-            else:
-                page_aligned_len = actual_kv_len
-                page_aligned_kv_indices = kv_indices[:page_aligned_len].copy()
-    
-            page_aligned_token_len = page_aligned_len + 1 if self.is_eagle else page_aligned_len
-            old_prefix_len = len(req.prefix_indices)
-            if self.is_eagle and old_prefix_len > req.last_matched_prefix_len:
-                # In EAGLE chunked prefill case, the prefix_indices included one unmatched token (kv_indices[actual_kv_len:])
-                # Here we -1 to make sure the kv of the unmatched token can be freed correctly to avoid memory leak
-                old_prefix_len -= 1
-    
-            # Radix Cache takes over one reference from memory pool
-            new_prefix_len = self.insert(
-                RadixKey(token_ids[:page_aligned_token_len], req.extra_key), page_aligned_kv_indices
+        """Cache completed requests"""
+        all_token_len = len(req.origin_input_ids) + max(len(req.output_ids) - 1, 0)
+        if self.disable:
+            kv_indices = self.req_to_token_pool.read(
+                req.req_pool_idx,
+                all_token_len,
             )
-    
-            self.token_to_kv_pool_allocator.free(kv_indices[old_prefix_len:new_prefix_len])
-            # free the unaligned tail
-            self.token_to_kv_pool_allocator.free(kv_indices[page_aligned_len:])
-    
-            # Remove request slot and release cache lock
+            kv_indices = kv_indices[kv_indices != 0]
+            self.token_to_kv_pool_allocator.free(kv_indices)
             self.req_to_token_pool.free(req.req_pool_idx)
-            self.dec_lock_ref(req.last_node)
+            return
+
+        token_ids = (req.origin_input_ids + req.output_ids)[:all_token_len]
+        # For EAGLE radix cache, we will convert the key to bigram key, e.g. [1,2,3,4] -> [(1,2), (2,3), (3,4)], the length will -1. ((len([(1,2), (2,3), (3,4)]) = len([1,2,3,4]) - 1))
+        # So for the corresponding kv length should also -1. Then we get the actual_kv_len, and use it to do later calculation and slicing.
+        actual_kv_len = all_token_len - 1 if self.is_eagle else all_token_len
+        kv_indices = self.req_to_token_pool.read(req.req_pool_idx, all_token_len)
+        kv_indices = kv_indices[kv_indices != 0]
+
+        if self.page_size != 1:
+            page_aligned_len = actual_kv_len // self.page_size * self.page_size
+            page_aligned_kv_indices = kv_indices[:page_aligned_len].copy()
+            self.token_to_kv_pool_allocator.free(kv_indices[page_aligned_len:])
+        else:
+            page_aligned_len = actual_kv_len
+            page_aligned_kv_indices = kv_indices[:page_aligned_len].copy()
+
+        page_aligned_token_len = page_aligned_len + 1 if self.is_eagle else page_aligned_len
+        old_prefix_len = len(req.prefix_indices)
+        if self.is_eagle and old_prefix_len > req.last_matched_prefix_len:
+            # In EAGLE chunked prefill case, the prefix_indices included one unmatched token (kv_indices[actual_kv_len:])
+            # Here we -1 to make sure the kv of the unmatched token can be freed correctly to avoid memory leak
+            old_prefix_len -= 1
+
+        # Radix Cache takes over one reference from memory pool
+        new_prefix_len = self.insert(
+            RadixKey(token_ids[:page_aligned_token_len], req.extra_key), page_aligned_kv_indices
+        )
+
+        self.token_to_kv_pool_allocator.free(kv_indices[old_prefix_len:new_prefix_len])
+        # free the unaligned tail
+        self.token_to_kv_pool_allocator.free(kv_indices[page_aligned_len:])
+
+        # Remove request slot and release cache lock
+        self.req_to_token_pool.free(req.req_pool_idx)
+        self.dec_lock_ref(req.last_node)
 
     def cache_unfinished_req(self, req: Req):
-        with self.lock:
-            """Cache incomplete requests"""
-            if self.disable:
-                return
-    
-            token_ids = req.fill_ids
-            all_token_len = len(token_ids)
-            # For EAGLE radix cache, we will convert the key to bigram key, e.g. [1,2,3,4] -> [(1,2), (2,3), (3,4)], the length will -1. ((len([(1,2), (2,3), (3,4)]) = len([1,2,3,4]) - 1))
-            # So for the corresponding kv length should also -1. Then we get the actual_kv_len, and use it to do later calculation and slicing.
-            actual_kv_len = all_token_len - 1 if self.is_eagle else all_token_len
-            kv_indices = self.req_to_token_pool.read(req.req_pool_idx, all_token_len)
-    
-            if self.page_size != 1:
-                page_aligned_len = actual_kv_len // self.page_size * self.page_size
-                page_aligned_kv_indices = kv_indices[:page_aligned_len].copy()
-            else:
-                page_aligned_len = actual_kv_len
-                page_aligned_kv_indices = kv_indices
-    
-            # For EAGLE, the page_aligned_len is for the bigram key, the normal key len should +1
-            page_aligned_token_len = page_aligned_len + 1 if self.is_eagle else page_aligned_len
-            page_aligned_token_ids = token_ids[:page_aligned_token_len]
-    
-            old_prefix_len = len(req.prefix_indices)
-            if self.is_eagle and old_prefix_len > req.last_matched_prefix_len:
-                # In EAGLE chunked prefill case, the prefix_indices included one unmatched token (kv_indices[actual_kv_len:])
-                # Here we -1 to make sure the kv of the unmatched token can be freed correctly to avoid memory leak
-                old_prefix_len -= 1
-    
-            # Radix Cache takes over one reference from memory pool
-            radix_key = RadixKey(page_aligned_token_ids, req.extra_key)
-            new_prefix_len = self.insert(radix_key, page_aligned_kv_indices)
-            self.token_to_kv_pool_allocator.free(kv_indices[old_prefix_len:new_prefix_len])
-    
-            # Prefix indices may have been updated, reuse them
-            new_match_result = self.match_prefix(radix_key)
-            new_indices = new_match_result.device_indices  # cpu
-            new_last_node = new_match_result.last_device_node
-    
-            self.req_to_token_pool.write(
-                (req.req_pool_idx, slice(old_prefix_len, len(new_indices))),
-                new_indices[old_prefix_len:],
-            )
-            req.last_matched_prefix_len = len(new_indices)
-            self.dec_lock_ref(req.last_node)
-            self.inc_lock_ref(new_last_node)
-    
-            # `req.prefix_indices` will be used later in `PrefillAdder::add_chunked_req`
-            if self.page_size != 1:
-                # create array on CPU
-                req.prefix_indices = np.concat([new_indices, kv_indices[len(new_indices) :]])
+        """Cache incomplete requests"""
+        if self.disable:
+            return
+
+        token_ids = req.fill_ids
+        all_token_len = len(token_ids)
+        # For EAGLE radix cache, we will convert the key to bigram key, e.g. [1,2,3,4] -> [(1,2), (2,3), (3,4)], the length will -1. ((len([(1,2), (2,3), (3,4)]) = len([1,2,3,4]) - 1))
+        # So for the corresponding kv length should also -1. Then we get the actual_kv_len, and use it to do later calculation and slicing.
+        actual_kv_len = all_token_len - 1 if self.is_eagle else all_token_len
+        kv_indices = self.req_to_token_pool.read(req.req_pool_idx, all_token_len)
+
+        if self.page_size != 1:
+            page_aligned_len = actual_kv_len // self.page_size * self.page_size
+            page_aligned_kv_indices = kv_indices[:page_aligned_len].copy()
+        else:
+            page_aligned_len = actual_kv_len
+            page_aligned_kv_indices = kv_indices
+
+        # For EAGLE, the page_aligned_len is for the bigram key, the normal key len should +1
+        page_aligned_token_len = page_aligned_len + 1 if self.is_eagle else page_aligned_len
+        page_aligned_token_ids = token_ids[:page_aligned_token_len]
+
+        old_prefix_len = len(req.prefix_indices)
+        if self.is_eagle and old_prefix_len > req.last_matched_prefix_len:
+            # In EAGLE chunked prefill case, the prefix_indices included one unmatched token (kv_indices[actual_kv_len:])
+            # Here we -1 to make sure the kv of the unmatched token can be freed correctly to avoid memory leak
+            old_prefix_len -= 1
+
+        # Radix Cache takes over one reference from memory pool
+        radix_key = RadixKey(page_aligned_token_ids, req.extra_key)
+        new_prefix_len = self.insert(radix_key, page_aligned_kv_indices)
+        self.token_to_kv_pool_allocator.free(kv_indices[old_prefix_len:new_prefix_len])
+
+        # Prefix indices may have been updated, reuse them
+        new_match_result = self.match_prefix(radix_key)
+        new_indices = new_match_result.device_indices  # cpu
+        new_last_node = new_match_result.last_device_node
+
+        self.req_to_token_pool.write(
+            (req.req_pool_idx, slice(old_prefix_len, len(new_indices))),
+            new_indices[old_prefix_len:],
+        )
+        req.last_matched_prefix_len = len(new_indices)
+        self.dec_lock_ref(req.last_node)
+        self.inc_lock_ref(new_last_node)
+
+        # `req.prefix_indices` will be used later in `PrefillAdder::add_chunked_req`
+        if self.page_size != 1:
+            # create array on CPU
+            req.prefix_indices = np.concat([new_indices, kv_indices[len(new_indices) :]])
+        else:
+            req.prefix_indices = new_indices
+            if self.is_eagle:
+                # Attach the kv index of the last token for EAGLE, it can be used in chunked prefill
+                req.prefix_indices = np.concatenate([new_indices, kv_indices[actual_kv_len:]])
             else:
                 req.prefix_indices = new_indices
-                if self.is_eagle:
-                    # Attach the kv index of the last token for EAGLE, it can be used in chunked prefill
-                    req.prefix_indices = np.concatenate([new_indices, kv_indices[actual_kv_len:]])
-                else:
-                    req.prefix_indices = new_indices
-            req.last_node = new_last_node
+        req.last_node = new_last_node
 
     def pretty_print(self):
         print(f"\n[process {self.process_id}] Radix Tree structure:")
@@ -379,58 +373,55 @@ class RadixCache(BasePrefixCache):
         return self._total_size_helper()
 
     def evict(self, num_tokens: int):
-        with self.lock:
-            if self.disable:
-                return
-    
-            leaves = self._collect_leaves()
-            heapq.heapify(leaves)
-    
-            num_evicted = 0
-            while num_evicted < num_tokens and len(leaves):
-                x = heapq.heappop(leaves)
-    
-                if x == self.root_node:
-                    break
-                if x.lock_ref > 0:
-                    continue
-    
-                self.token_to_kv_pool_allocator.free(x.value)
-                num_evicted += len(x.value)
-                self._delete_leaf(x)
-    
-                if len(x.parent.children) == 0:
-                    heapq.heappush(leaves, x.parent)
+        if self.disable:
+            return
+
+        leaves = self._collect_leaves()
+        heapq.heapify(leaves)
+
+        num_evicted = 0
+        while num_evicted < num_tokens and len(leaves):
+            x = heapq.heappop(leaves)
+
+            if x == self.root_node:
+                break
+            if x.lock_ref > 0:
+                continue
+
+            self.token_to_kv_pool_allocator.free(x.value)
+            num_evicted += len(x.value)
+            self._delete_leaf(x)
+
+            if len(x.parent.children) == 0:
+                heapq.heappush(leaves, x.parent)
 
     def inc_lock_ref(self, node: TreeNode):
-        with self.lock:
-            if self.disable:
-                return 0
-    
-            delta = 0
-            while node != self.root_node:
-                if node.lock_ref == 0:
-                    self.evictable_size_ -= len(node.value)
-                    self.protected_size_ += len(node.value)
-                    delta -= len(node.value)
-                node.lock_ref += 1
-                node = node.parent
-            return delta
+        if self.disable:
+            return 0
+
+        delta = 0
+        while node != self.root_node:
+            if node.lock_ref == 0:
+                self.evictable_size_ -= len(node.value)
+                self.protected_size_ += len(node.value)
+                delta -= len(node.value)
+            node.lock_ref += 1
+            node = node.parent
+        return delta
 
     def dec_lock_ref(self, node: TreeNode, swa_uuid_for_lock: str | None = None):
-        with self.lock:
-            if self.disable:
-                return 0
-    
-            delta = 0
-            while node != self.root_node:
-                if node.lock_ref == 1:
-                    self.evictable_size_ += len(node.value)
-                    self.protected_size_ -= len(node.value)
-                    delta += len(node.value)
-                node.lock_ref -= 1
-                node = node.parent
-            return delta
+        if self.disable:
+            return 0
+
+        delta = 0
+        while node != self.root_node:
+            if node.lock_ref == 1:
+                self.evictable_size_ += len(node.value)
+                self.protected_size_ -= len(node.value)
+                delta += len(node.value)
+            node.lock_ref -= 1
+            node = node.parent
+        return delta
 
     def evictable_size(self):
         return self.evictable_size_
