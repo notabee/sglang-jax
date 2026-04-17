@@ -136,7 +136,7 @@ class ModelWorkerClient:
                 
                 try:
                     # Inspect embedding for token 0
-                    embed_tokens = self.worker.model_runner.model.embed_tokens
+                    embed_tokens = self.worker.model_runner.model.model.embed_tokens
                     embedding_val = jax.device_get(embed_tokens.embedding.value[0])
                     print(f"[DEBUG EMBEDDING 0] Step {self.debug_print_count} | Token 0 Embedding[:5]: {embedding_val[:5]}")
                 except Exception as e:
