@@ -27,8 +27,6 @@ from sgl_jax.srt.utils.weight_utils import WeightLoader, WeightMapping
 
 logger = logging.getLogger(__name__)
 
-_decode_print_counter = 0
-
 class Glm4MoeAttention(nnx.Module):
     def __init__(
         self,
@@ -144,8 +142,16 @@ class Glm4MoeAttention(nnx.Module):
 
         q, k = self.rotary_emb(positions, q, k)
 
-        if self.layer_id == 0 and forward_batch.forward_mode == ForwardMode.DECODE:
-            jax.debug.print("[DEBUG QKV] Layer 0 | Q[0, :8, :5]: {q_slice}", q_slice=q[:1, :8, :5])
+        def _print_nan(q, k, v):
+            jax.debug.print("[DEBUG NaN Detected!]")
+            jax.debug.print("Q[0, :8, :5]: {q_slice}", q_slice=q[:1, :8, :5])
+            jax.debug.print("K[0, :8, :5]: {k_slice}", k_slice=k[:1, :8, :5])
+            jax.debug.print("V[0, :8, :5]: {v_slice}", v_slice=v[:1, :8, :5])
+            return None
+
+        has_nan = jnp.isnan(q).any() | jnp.isnan(k).any() | jnp.isnan(v).any()
+        
+        jax.lax.cond(has_nan, _print_nan, lambda q, k, v: None, q, k, v)
 
         attn_output, kv_fused = self.attn(
             q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
@@ -241,7 +247,6 @@ class Glm4MoeDecoderLayer(nnx.Module):
         )
 
         first_k_dense_replace = getattr(config, "first_k_dense_replace", 0)
-        self.first_k_dense_replace = first_k_dense_replace
 
         if layer_id < first_k_dense_replace:
             self.mlp = Glm4MoeMLP(
