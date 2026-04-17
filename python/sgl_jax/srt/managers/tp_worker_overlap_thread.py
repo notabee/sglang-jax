@@ -122,6 +122,8 @@ class ModelWorkerClient:
                         forward_metadata=forward_metadata,
                     )
                 )
+            if self.debug_print_count < 5:
+                print(f"[DEBUG LOGITS] Max: {jnp.max(logits_output.next_token_logits)}, Min: {jnp.min(logits_output.next_token_logits)}")
 
             # Update the future token ids map
             self.future_token_ids_map = set_future_token_ids(
