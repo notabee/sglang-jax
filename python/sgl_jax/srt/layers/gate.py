@@ -46,11 +46,8 @@ class GateLogit(nnx.Module):
             self.bias = None
 
     @named_scope
-    def __call__(self, hidden_states: jax.Array) -> jax.Array:
+    def __call__(self, hidden_states: jax.Array) -> tuple[jax.Array, jax.Array | None]:
         logits = jnp.dot(hidden_states, self.kernel.value)
-
-        if self.enable_expert_bias and self.bias is not None:
-            logits = logits + self.bias.value
 
         if self.score_func:
             if self.score_func == "softmax":

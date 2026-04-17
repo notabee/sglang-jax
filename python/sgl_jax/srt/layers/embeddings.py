@@ -220,8 +220,6 @@ class RotaryEmbedding:
     ) -> tuple[jax.Array, jax.Array]:
         positions = positions.flatten()  # [num_tokens]
 
-
-
         inv_freq = jnp.asarray(self._inv_freq_np, dtype=self.dtype)
 
         # Compute freqs = positions * inv_freq
