@@ -112,6 +112,9 @@ class TopK(nnx.Module):
 
         topk_weights = topk_weights.astype(jnp.float32)
 
+        jax.debug.print("Layer {layer_id} topk_ids: {topk_ids}", layer_id=self.layer_id, topk_ids=topk_ids)
+        jax.debug.print("Layer {layer_id} topk_weights: {topk_weights}", layer_id=self.layer_id, topk_weights=topk_weights)
+
         return topk_weights, topk_ids
 
     def _topk(self, router_logits):
