@@ -1043,7 +1043,11 @@ class ScheduleBatch:
                 self.sampling_info.penalizer_orchestrator.cumulate_output_tokens(self.output_ids)
 
         # Update fields
-        self.input_ids = self.output_ids
+        # self.input_ids = self.output_ids
+        self.input_ids = np.array(
+            [req.output_ids[-1] for req in self.reqs],
+            dtype=np.int32
+        )
         for i, req in enumerate(self.reqs):
             if len(req.output_ids) == 1:
                 token_id = self.input_ids[i]
