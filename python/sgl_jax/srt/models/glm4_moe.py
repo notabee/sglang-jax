@@ -420,7 +420,7 @@ class Glm4MoeModel(nnx.Module):
         forward_batch: ForwardBatch,
         token_to_kv_pool: KVCache,
     ) -> jax.Array:
-        jax.debug.print("[DEBUG GLM4 MoE] Model received input_ids: {ids} for batch: {bid}", ids=forward_batch.input_ids, bid=forward_batch.bid)
+        jax.debug.print("[DEBUG GLM4 MoE] Model received input_ids: {ids}", ids=forward_batch.input_ids)
         hidden_states = self.embed_tokens(forward_batch.input_ids)
         residual = None
         layers_kv_fused = []
