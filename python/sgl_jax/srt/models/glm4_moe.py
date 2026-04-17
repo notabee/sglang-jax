@@ -372,7 +372,8 @@ class Glm4MoeDecoderLayer(nnx.Module):
             hidden_states = self.mlp(hidden_states, topk_weights, topk_ids)
 
             if shared_output is not None:
-                hidden_states = hidden_states + shared_output
+                # hidden_states = hidden_states + shared_output
+                pass
         else:
             hidden_states = self.mlp(hidden_states)
             topk_ids = None
