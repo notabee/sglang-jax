@@ -124,6 +124,7 @@ class ModelWorkerClient:
                 )
             if self.debug_print_count < 5:
                 print(f"[DEBUG LOGITS] Max: {jnp.max(logits_output.next_token_logits)}, Min: {jnp.min(logits_output.next_token_logits)}")
+                print(f"[DEBUG SEQ LENS] Step {self.debug_print_count} | Seq Lens: {model_worker_batch.seq_lens}")
                 try:
                     # Inspect the slots allocated for this batch
                     indices = model_worker_batch.out_cache_loc
