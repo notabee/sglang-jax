@@ -381,10 +381,8 @@ class BailingMoEDecoderLayer(nnx.Module):
                 shared_output = None
             router_logits = self.moe_gate(hidden_states)
 
-            correction_bias = self.moe_gate.bias.value if self.moe_gate.bias is not None else None
             topk_weights, topk_ids = self.topk(
                 router_logits,
-                correction_bias,
                 dispatch_info=dispatch_info,
             )
 
