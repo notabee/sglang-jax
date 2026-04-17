@@ -143,7 +143,7 @@ class Glm4MoeAttention(nnx.Module):
         q, k = self.rotary_emb(positions, q, k)
 
         if self.layer_id == 0 and forward_batch.forward_mode == ForwardMode.DECODE:
-            jax.debug.print("[DEBUG QKV] Layer 0 | Q[0, :8, :5]: {q_slice}", q_slice=q[:1, :8, :5])
+            jax.debug.print("[DEBUG QKV] Layer 0 | Q[0, :8, :5]: {q_slice}", q_slice=q[0, 0, :3])
 
         attn_output, kv_fused = self.attn(
             q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
