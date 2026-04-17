@@ -361,8 +361,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
             else:
                 shared_output = None
             router_logits = self.moe_gate(hidden_states)
-            if self.layer_id == 0:
-                jax.debug.print("[DEBUG MOE L0] router_logits Max: {max}, Min: {min}", max=jnp.max(router_logits), min=jnp.min(router_logits))
+
 
             correction_bias = self.moe_gate.bias.value if self.moe_gate.bias is not None else None
             topk_weights, topk_ids = self.topk(
@@ -370,9 +369,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
                 correction_bias,
                 dispatch_info=dispatch_info,
             )
-            if self.layer_id == 0:
-                jax.debug.print("[DEBUG MOE L0] topk_weights Max: {max}, Min: {min}", max=jnp.max(topk_weights), min=jnp.min(topk_weights))
-                jax.debug.print("[DEBUG MOE L0] topk_ids: {ids}", ids=topk_ids)
+
 
             hidden_states = self.mlp(hidden_states, topk_weights, topk_ids)
 
