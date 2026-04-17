@@ -129,9 +129,18 @@ class ModelWorkerClient:
                     # Inspect the slots allocated for this batch
                     indices = model_worker_batch.out_cache_loc
                     kv_cache_host = self.worker.model_runner.token_to_kv_pool.get_cpu_copy(indices)
-                    # kv_cache_host[0] is [k_host, v_host] for Layer 0
                     k_host = kv_cache_host[0][0]
                     print(f"[DEBUG KV VALS] Step {self.debug_print_count} | Locs: {indices} | K[0,:5] (Req 0): {k_host[0, 0, :5]} | K[1,:5] (Req 1): {k_host[1, 0, :5]}")
+                    
+                    # Inspect past slots
+                    req_pool_indices = model_worker_batch.req_pool_indices
+                    token_indices = self.worker.model_runner.req_to_token_pool.req_to_token[req_pool_indices]
+                    past_indices = token_indices[:, 0]
+                    past_kv_host = self.worker.model_runner.token_to_kv_pool.get_cpu_copy(past_indices)
+                    past_k_host = past_kv_host[0][0]
+                    print(f"[DEBUG PAST KV] Step {self.debug_print_count} | Past Indices: {past_indices}")
+                    for i in range(len(past_indices)):
+                        print(f"  Req {i} | Slot {past_indices[i]} | K[:5]: {past_k_host[i, 0, :5]}")
                 except Exception as e:
                     print(f"[DEBUG KV VALS] Error fetching cache: {e}")
                 
