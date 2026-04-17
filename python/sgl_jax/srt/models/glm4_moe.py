@@ -235,6 +235,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
         )
 
         first_k_dense_replace = getattr(config, "first_k_dense_replace", 0)
+        self.first_k_dense_replace = first_k_dense_replace
 
         if layer_id < first_k_dense_replace:
             self.mlp = Glm4MoeMLP(
@@ -369,7 +370,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
                 dispatch_info=dispatch_info,
             )
             
-            if self.is_moe_layer and self.layer_id == getattr(self.config, "first_k_dense_replace", 0):
+            if self.is_moe_layer and self.layer_id == self.first_k_dense_replace:
                 def _print_moe(logits, weights, ids):
                     print(f"[DEBUG MoE] Layer {self.layer_id} | logits[0, :5]: {logits[0, :5]}")
                     print(f"[DEBUG MoE] Layer {self.layer_id} | weights[0]: {weights[0]}")
