@@ -142,16 +142,8 @@ class Glm4MoeAttention(nnx.Module):
 
         q, k = self.rotary_emb(positions, q, k)
 
-        def _print_nan(q, k, v):
-            jax.debug.print("[DEBUG NaN Detected!]")
-            jax.debug.print("Q[0, :8, :5]: {q_slice}", q_slice=q[:1, :8, :5])
-            jax.debug.print("K[0, :8, :5]: {k_slice}", k_slice=k[:1, :8, :5])
-            jax.debug.print("V[0, :8, :5]: {v_slice}", v_slice=v[:1, :8, :5])
-            return None
-
-        has_nan = jnp.isnan(q).any() | jnp.isnan(k).any() | jnp.isnan(v).any()
-        
-        jax.lax.cond(has_nan, _print_nan, lambda q, k, v: None, q, k, v)
+        if self.layer_id == 0 and forward_batch.forward_mode == ForwardMode.DECODE:
+            jax.debug.print("[DEBUG QKV] Layer 0 | Q[0, :8, :5]: {q_slice}", q_slice=q[:1, :8, :5])
 
         attn_output, kv_fused = self.attn(
             q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
@@ -268,8 +260,8 @@ class Glm4MoeDecoderLayer(nnx.Module):
                 score_func=getattr(config, "scoring_func", "sigmoid"),
             )
 
-            self.moe_backend = getattr(config, "moe_backend", MoEBackend.EPMOE)
-            self.use_fused = self.moe_backend == MoEBackend.FUSED
+            self.moe_backend = getattr(config, "moe_backend", "epmoe")
+            self.use_fused = False
 
             self.topk = TopK(
                 topk=config.num_experts_per_tok,
@@ -287,7 +279,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
                     num_experts_per_tok=config.num_experts_per_tok,
                     intermediate_dim=config.moe_intermediate_size,
                     mesh=mesh,
-                    ep_size=1, # Default to 1 for now
+                    ep_size=getattr(config, "ep_size", 1),
                     weight_dtype=dtype,
                     dtype=dtype,
                     layer_id=layer_id,
@@ -307,7 +299,7 @@ class Glm4MoeDecoderLayer(nnx.Module):
                     num_experts_per_tok=config.num_experts_per_tok,
                     intermediate_dim=config.moe_intermediate_size,
                     mesh=mesh,
-                    ep_size=1, # Default to 1 for now
+                    ep_size=getattr(config, "ep_size", 1),
                     weight_dtype=dtype,
                     dtype=dtype,
                     layer_id=layer_id,
