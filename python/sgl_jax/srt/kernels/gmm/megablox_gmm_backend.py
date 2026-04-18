@@ -76,6 +76,13 @@ def gmm(
             acc_dtype=acc_dtype,
         )
     else:
+        m = lhs.shape[0]
+        pad_size = 0
+        if not interpret and m % 128 != 0:
+            pad_size = 128 - (m % 128)
+            lhs = jnp.pad(lhs, ((0, pad_size), (0, 0)))
+            group_sizes = group_sizes.at[-1].add(pad_size)
+
         out = gmm_v1_kernel(
             lhs,
             rhs,
@@ -88,6 +95,9 @@ def gmm(
             existing_out=existing_out,
             interpret=interpret,
         )
+        
+        if pad_size > 0:
+            out = out[:m]
 
     if lhs_scale is not None:
         out = out * lhs_scale
