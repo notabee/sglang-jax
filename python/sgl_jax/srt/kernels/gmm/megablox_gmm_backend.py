@@ -54,8 +54,15 @@ def gmm(
     if interpret is None:
         interpret = not is_tpu_runtime()
 
-    # Force gmm_v1 for testing
-    use_gmm_v2 = False
+    use_gmm_v2 = not interpret and is_supported_by_gmm_v2(rhs_scale)
+
+    # Pad LHS to multiple of 128 on TPU to avoid small/unaligned tiles
+    m = lhs.shape[0]
+    pad_size = 0
+    if not interpret and m % 128 != 0:
+        pad_size = 128 - (m % 128)
+        lhs = jnp.pad(lhs, ((0, pad_size), (0, 0)))
+        group_sizes = group_sizes.at[-1].add(pad_size)
 
     lhs_scale = None
     if not use_gmm_v2 and activation_quantized_dtype is not None:
@@ -76,13 +83,6 @@ def gmm(
             acc_dtype=acc_dtype,
         )
     else:
-        m = lhs.shape[0]
-        pad_size = 0
-        if not interpret and m % 128 != 0:
-            pad_size = 128 - (m % 128)
-            lhs = jnp.pad(lhs, ((0, pad_size), (0, 0)))
-            group_sizes = group_sizes.at[-1].add(pad_size)
-
         out = gmm_v1_kernel(
             lhs,
             rhs,
@@ -95,11 +95,13 @@ def gmm(
             existing_out=existing_out,
             interpret=interpret,
         )
-        
-        if pad_size > 0:
-            out = out[:m]
 
+    # Apply scale first if v1 used per-tensor quantization
     if lhs_scale is not None:
         out = out * lhs_scale
+
+    # Slice output back to original size if padded
+    if pad_size > 0:
+        out = out[:m]
 
     return out
