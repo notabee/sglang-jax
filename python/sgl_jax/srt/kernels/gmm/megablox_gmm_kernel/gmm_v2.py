@@ -282,7 +282,6 @@ def inner_kernel(
                 acc += tiled_rhs_ref.bias[...].astype(acc.dtype)
 
             gm_id = pl.program_id(1)
-            n_id = pl.program_id(0)
 
             # Mask out rows that does not belong to the current group.
             m_start = metadata_ref.gm_id_to_m_offset[gm_id]
