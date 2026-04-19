@@ -306,7 +306,6 @@ def inner_kernel(
             partial_out_zeros = jnp.zeros_like(partial_out_ref)
 
             # Accumulate the partial output from the previous step.
-            jax.debug.print("gmm_v2 n_id={} gm_id={} read partial_out sum={}", n_id, gm_id, jnp.sum(partial_out_ref[...]).astype(jnp.int32))
             tiled_out_ref[0] += jnp.where(gm_id == 0, partial_out_zeros, partial_out_ref[...])
 
             # Consider following case where size_lhs_sublane = 4, number denotes group
@@ -325,7 +324,6 @@ def inner_kernel(
                 partial_out_zeros,
                 tiled_out_ref[last_row],
             )
-            jax.debug.print("gmm_v2 n_id={} gm_id={} wrote partial_out sum={}", n_id, gm_id, jnp.sum(partial_out_ref[...]).astype(jnp.int32))
         else:
             acc_ref[...] = acc
 
@@ -918,6 +916,21 @@ def gmm_v2(
     if vmem_limit_bytes is None:
         vmem_limit_bytes = int(pltpu.get_tpu_info().vmem_capacity_bytes * 0.9)
 
+    # Check if we are going to use activation quantization
+    rhs_quantized = rhs_scale is not None
+    tpu_info = pltpu.get_tpu_info()
+    is_rhs_float = jnp.issubdtype(rhs.dtype, jnp.floating)
+    has_hw_support = (is_rhs_float and tpu_info.fp8_ops_per_second > 0) or (not is_rhs_float and tpu_info.int8_ops_per_second > 0)
+    
+    original_m = lhs.shape[0]
+    pad_size = 0
+    
+    # Only pad if we are taking the quantized path AND it's not aligned to 128
+    if maybe_quantize_lhs and rhs_quantized and has_hw_support and original_m % 128 != 0:
+        pad_size = 128 - (original_m % 128)
+        lhs = jnp.pad(lhs, ((0, pad_size), (0, 0)))
+        group_sizes = group_sizes.at[-1].add(pad_size)
+
     cfgs = make_gmm_configs(
         lhs,
         rhs,
@@ -1013,6 +1026,11 @@ def gmm_v2(
         cost_estimate=get_cost_estimate(lhs, rhs_weights, out_init.dtype, dims),
         metadata=get_metadata(cfgs),
     )(group_sizes, group_offset, lhs, rhs_weights)[:, : dims.size_n]
+
+    if pad_size > 0:
+        out = out[:original_m]
+
+    return out
 
 
 def is_supported_by_gmm_v2(rhs_scale: jax.Array | None) -> bool:
