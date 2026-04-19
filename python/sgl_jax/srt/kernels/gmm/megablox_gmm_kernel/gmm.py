@@ -429,7 +429,7 @@ def gmm(
 
         grid_id = pl.program_id(1)
         k_i = pl.program_id(2)
-        jax.debug.print("gmm_v1 grid_id={grid_id} k_i={k_i}", grid_id=grid_id, k_i=k_i)
+        jax.debug.print("gmm_v1 grid_id={} k_i={}", grid_id, k_i)
 
         @pl.when(k_i == 0)
         def _zero_acc():
