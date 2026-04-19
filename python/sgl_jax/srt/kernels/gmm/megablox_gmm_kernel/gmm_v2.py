@@ -308,7 +308,7 @@ def inner_kernel(
             # Accumulate the partial output from the previous step.
             @pl.when(n_id == 0)
             def _print_read():
-                jax.debug.print("gmm_v2 n_id={} gm_id={} read partial_out sum={}", n_id, gm_id, jnp.sum(partial_out_ref[...]))
+                jax.debug.print("gmm_v2 n_id={} gm_id={} read partial_out sum={}", n_id, gm_id, jnp.sum(partial_out_ref[...]).astype(jnp.int32))
             tiled_out_ref[0] += jnp.where(gm_id == 0, partial_out_zeros, partial_out_ref[...])
 
             # Consider following case where size_lhs_sublane = 4, number denotes group
@@ -329,7 +329,7 @@ def inner_kernel(
             )
             @pl.when(n_id == 0)
             def _print_write():
-                jax.debug.print("gmm_v2 n_id={} gm_id={} wrote partial_out sum={}", n_id, gm_id, jnp.sum(partial_out_ref[...]))
+                jax.debug.print("gmm_v2 n_id={} gm_id={} wrote partial_out sum={}", n_id, gm_id, jnp.sum(partial_out_ref[...]).astype(jnp.int32))
         else:
             acc_ref[...] = acc
 
