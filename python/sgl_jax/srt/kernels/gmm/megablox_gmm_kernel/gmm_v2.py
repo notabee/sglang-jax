@@ -296,29 +296,13 @@ def inner_kernel(
             mask = jnp.logical_and(m_start_local <= iota, iota < m_end_local)
             acc_masked = jnp.where(mask, acc, 0).reshape(tiled_out_ref.shape)
 
-            # Read the previous value from HBM for the overlapping row (index 0).
-            # This replaces the need to pass partial results via VMEM scratchpad.
-            prev_hbm_val = tiled_out_ref[0]
+            # Read the current value from HBM.
+            loaded_out = tiled_out_ref[...]
 
-            # Write the final output to the output ref.
-            tiled_out_ref[...] = acc_masked.astype(tiled_out_ref.dtype)
-
-            # Accumulate the partial output from the previous step by adding it back.
-            partial_out_zeros = jnp.zeros_like(prev_hbm_val)
-            tiled_out_ref[0] += jnp.where(gm_id == 0, partial_out_zeros, prev_hbm_val)
-
-            # Consider following case where size_lhs_sublane = 4, number denotes group
-            # id and | denotes boundaries between sublanes:
-            # | 0 0 1 2 | 2 2 2 2 | 3 3 4 4 |
-            #
-            # Assuming group id of current step is 1, current step will not completely
-            # fill size_lhs_sublane rows and will be revisited at the next step. By
-            # storing the partial rows into the partial_out_ref, the next step can
-            # read them and accumulate to them.  Additionally, for group id of 2,
-            # since it completely fills the size_lhs_sublane rows, we need to zero out
-            # partial_out_ref to avoid numeric error for group 3.
-            # We no longer need to write to partial_out_ref as we read directly from HBM.
-            pass
+            # Overwrite ONLY the rows we own, and keep the old values for rows we don't own.
+            # This avoids destroying results from other experts sharing the same sublane.
+            mask_3d = mask.reshape(tiled_out_ref.shape)
+            tiled_out_ref[...] = jnp.where(mask_3d, acc_masked, loaded_out).astype(tiled_out_ref.dtype)
         else:
             acc_ref[...] = acc
 
