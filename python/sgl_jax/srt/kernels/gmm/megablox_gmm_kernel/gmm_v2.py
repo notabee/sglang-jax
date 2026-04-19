@@ -296,16 +296,16 @@ def inner_kernel(
             mask = jnp.logical_and(m_start_local <= iota, iota < m_end_local)
             acc_masked = jnp.where(mask, acc, 0).reshape(tiled_out_ref.shape)
 
+            # Read the previous value from HBM for the overlapping row (index 0).
+            # This replaces the need to pass partial results via VMEM scratchpad.
+            prev_hbm_val = tiled_out_ref[0]
+
             # Write the final output to the output ref.
             tiled_out_ref[...] = acc_masked.astype(tiled_out_ref.dtype)
 
-            # If this is the first tile for grid[n_id, :, :], we initialize the
-            # partial out to zeros. Otherwise, partial out from last tile of
-            # grid[n_id-1, :, :] can be used and cause numeric issues.
-            partial_out_zeros = jnp.zeros_like(partial_out_ref)
-
-            # Accumulate the partial output from the previous step.
-            tiled_out_ref[0] += jnp.where(gm_id == 0, partial_out_zeros, partial_out_ref[...])
+            # Accumulate the partial output from the previous step by adding it back.
+            partial_out_zeros = jnp.zeros_like(prev_hbm_val)
+            tiled_out_ref[0] += jnp.where(gm_id == 0, partial_out_zeros, prev_hbm_val)
 
             # Consider following case where size_lhs_sublane = 4, number denotes group
             # id and | denotes boundaries between sublanes:
@@ -317,12 +317,8 @@ def inner_kernel(
             # read them and accumulate to them.  Additionally, for group id of 2,
             # since it completely fills the size_lhs_sublane rows, we need to zero out
             # partial_out_ref to avoid numeric error for group 3.
-            last_row = m_end_local // cfgs.dims.size_lhs_sublane
-            partial_out_ref[...] = jnp.where(
-                m_end_local % cfgs.dims.size_lhs_sublane == 0,
-                partial_out_zeros,
-                tiled_out_ref[last_row],
-            )
+            # We no longer need to write to partial_out_ref as we read directly from HBM.
+            pass
         else:
             acc_ref[...] = acc
 
@@ -915,21 +911,6 @@ def gmm_v2(
     if vmem_limit_bytes is None:
         vmem_limit_bytes = int(pltpu.get_tpu_info().vmem_capacity_bytes * 0.9)
 
-    # Check if we are going to use activation quantization
-    rhs_quantized = rhs_scale is not None
-    tpu_info = pltpu.get_tpu_info()
-    is_rhs_float = jnp.issubdtype(rhs.dtype, jnp.floating)
-    has_hw_support = (is_rhs_float and tpu_info.fp8_ops_per_second > 0) or (not is_rhs_float and tpu_info.int8_ops_per_second > 0)
-    
-    original_m = lhs.shape[0]
-    pad_size = 0
-    
-    # Only pad if we are taking the quantized path AND it's not aligned to 128
-    if maybe_quantize_lhs and rhs_quantized and has_hw_support and original_m % 128 != 0:
-        pad_size = 128 - (original_m % 128)
-        lhs = jnp.pad(lhs, ((0, pad_size), (0, 0)))
-        group_sizes = group_sizes.at[-1].add(pad_size)
-
     cfgs = make_gmm_configs(
         lhs,
         rhs,
@@ -1025,11 +1006,6 @@ def gmm_v2(
         cost_estimate=get_cost_estimate(lhs, rhs_weights, out_init.dtype, dims),
         metadata=get_metadata(cfgs),
     )(group_sizes, group_offset, lhs, rhs_weights)[:, : dims.size_n]
-
-    if pad_size > 0:
-        out = out[:original_m]
-
-    return out
 
 
 def is_supported_by_gmm_v2(rhs_scale: jax.Array | None) -> bool:
