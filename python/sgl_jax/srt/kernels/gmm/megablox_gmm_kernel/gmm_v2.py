@@ -282,6 +282,7 @@ def inner_kernel(
                 acc += tiled_rhs_ref.bias[...].astype(acc.dtype)
 
             gm_id = pl.program_id(1)
+            n_id = pl.program_id(0)
 
             # Mask out rows that does not belong to the current group.
             m_start = metadata_ref.gm_id_to_m_offset[gm_id]
@@ -305,6 +306,9 @@ def inner_kernel(
             partial_out_zeros = jnp.zeros_like(partial_out_ref)
 
             # Accumulate the partial output from the previous step.
+            @pl.when(n_id == 0)
+            def _print_read():
+                jax.debug.print("gmm_v2 n_id={n_id} gm_id={gm_id} read partial_out sum={sum}", n_id=n_id, gm_id=gm_id, sum=jnp.sum(partial_out_ref[...]))
             tiled_out_ref[0] += jnp.where(gm_id == 0, partial_out_zeros, partial_out_ref[...])
 
             # Consider following case where size_lhs_sublane = 4, number denotes group
@@ -323,6 +327,9 @@ def inner_kernel(
                 partial_out_zeros,
                 tiled_out_ref[last_row],
             )
+            @pl.when(n_id == 0)
+            def _print_write():
+                jax.debug.print("gmm_v2 n_id={n_id} gm_id={gm_id} wrote partial_out sum={sum}", n_id=n_id, gm_id=gm_id, sum=jnp.sum(partial_out_ref[...]))
         else:
             acc_ref[...] = acc
 
