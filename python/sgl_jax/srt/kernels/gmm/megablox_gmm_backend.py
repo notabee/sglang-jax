@@ -54,7 +54,7 @@ def gmm(
     if interpret is None:
         interpret = not is_tpu_runtime()
 
-    use_gmm_v2 = not interpret and is_supported_by_gmm_v2(rhs_scale)
+    use_gmm_v2 = False
 
     lhs_scale = None
     if not use_gmm_v2 and activation_quantized_dtype is not None:
