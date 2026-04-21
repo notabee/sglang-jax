@@ -53,7 +53,7 @@ def main():
             rhs_scale=rhs_scale,
             group_offset=group_offset,
             maybe_quantize_lhs=True,  # Test the quantized path
-            zero_initialize=True,
+            zero_initialize=False,
         )
         print("Output shape:", out.shape)
         print("Output has NaN:", jnp.any(jnp.isnan(out)))
