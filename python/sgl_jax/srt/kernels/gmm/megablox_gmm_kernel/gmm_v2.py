@@ -974,6 +974,7 @@ def gmm_v2(
     return pl.pallas_call(
         functools.partial(kernel_main, cfgs=cfgs),
         out_shape=out_init,
+        interpret=True,
         grid_spec=pltpu.PrefetchScalarGridSpec(
             num_scalar_prefetch=2,
             in_specs=[
