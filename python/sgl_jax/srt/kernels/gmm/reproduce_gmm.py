@@ -1,5 +1,8 @@
 import jax
 import jax.numpy as jnp
+
+# Initialize TPU
+jax.distributed.initialize()
 import sys
 import os
 
