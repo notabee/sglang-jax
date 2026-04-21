@@ -203,8 +203,6 @@ def inner_kernel(
         tiled_lhs = tiled_lhs_ref.reshape(-1, cfgs.tiles.tile_k)[...]
         tiled_rhs = tiled_rhs_ref.weight[...]
 
-        lax.cond(jnp.any(jnp.isnan(tiled_lhs)), lambda: jax.debug.print("NaN in tiled_lhs"), lambda: None)
-        lax.cond(jnp.any(jnp.isnan(tiled_rhs)), lambda: jax.debug.print("NaN in tiled_rhs"), lambda: None)
         valid_k = cfgs.dims.size_k % cfgs.tiles.tile_k
         if is_last_k_step and valid_k != 0:
             mask_rhs = lax.broadcasted_iota(jnp.int32, tiled_rhs.shape, 0) < valid_k
@@ -261,7 +259,6 @@ def inner_kernel(
                     )
                     block_scale = block_abs_max / dtype_max
                     # Convert lhs into quantized dtype.
-                    lax.cond(jnp.any(jnp.isnan(block_scale)), lambda: jax.debug.print("NaN in block_scale"), lambda: None)
                     block_lhs_q = (block_lhs / block_scale).astype(lhs_q_dtype)
 
                     block_acc = jnp.matmul(
@@ -269,7 +266,6 @@ def inner_kernel(
                         block_rhs,
                         preferred_element_type=preferred_element_type,
                     ).astype(acc_ref.dtype)
-                    lax.cond(jnp.any(jnp.isnan(block_acc)), lambda: jax.debug.print("NaN in block_acc"), lambda: None)
 
                     acc_n += block_acc * block_scale.astype(acc_ref.dtype)
 
@@ -282,7 +278,8 @@ def inner_kernel(
         if is_last_k_step:
             if cfgs.rhs_cfgs.has_scale:
                 acc *= tiled_rhs_ref.scale[...].astype(acc.dtype)
-                lax.cond(jnp.any(jnp.isnan(acc)), lambda: jax.debug.print("NaN in acc after scale"), lambda: None)
+                has_nan = jnp.any(jnp.isnan(acc))
+                acc = jnp.where(has_nan, jnp.full_like(acc, 9999.0), acc)
             if cfgs.rhs_cfgs.has_bias:
                 acc += tiled_rhs_ref.bias[...].astype(acc.dtype)
 
