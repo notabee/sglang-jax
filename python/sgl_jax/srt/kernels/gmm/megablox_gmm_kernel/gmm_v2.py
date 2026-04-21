@@ -203,8 +203,6 @@ def inner_kernel(
         tiled_lhs = tiled_lhs_ref.reshape(-1, cfgs.tiles.tile_k)[...]
         tiled_rhs = tiled_rhs_ref.weight[...]
 
-        jax.debug.print("tiled_lhs has NaN: {}", jnp.any(jnp.isnan(tiled_lhs)))
-        jax.debug.print("tiled_rhs has NaN: {}", jnp.any(jnp.isnan(tiled_rhs)))
         valid_k = cfgs.dims.size_k % cfgs.tiles.tile_k
         if is_last_k_step and valid_k != 0:
             mask_rhs = lax.broadcasted_iota(jnp.int32, tiled_rhs.shape, 0) < valid_k
@@ -261,7 +259,6 @@ def inner_kernel(
                     )
                     block_scale = block_abs_max / dtype_max
                     # Convert lhs into quantized dtype.
-                    jax.debug.print("block_scale has NaN: {}", jnp.any(jnp.isnan(block_scale)))
                     block_lhs_q = (block_lhs / block_scale).astype(lhs_q_dtype)
 
                     block_acc = jnp.matmul(
@@ -269,7 +266,6 @@ def inner_kernel(
                         block_rhs,
                         preferred_element_type=preferred_element_type,
                     ).astype(acc_ref.dtype)
-                    jax.debug.print("block_acc has NaN: {}", jnp.any(jnp.isnan(block_acc)))
 
                     acc_n += block_acc * block_scale.astype(acc_ref.dtype)
 
@@ -282,7 +278,6 @@ def inner_kernel(
         if is_last_k_step:
             if cfgs.rhs_cfgs.has_scale:
                 acc *= tiled_rhs_ref.scale[...].astype(acc.dtype)
-                jax.debug.print("acc after scale has NaN: {}", jnp.any(jnp.isnan(acc)))
             if cfgs.rhs_cfgs.has_bias:
                 acc += tiled_rhs_ref.bias[...].astype(acc.dtype)
 
@@ -301,13 +296,33 @@ def inner_kernel(
             mask = jnp.logical_and(m_start_local <= iota, iota < m_end_local)
             acc_masked = jnp.where(mask, acc, 0).reshape(tiled_out_ref.shape)
 
-            # Read the current value from HBM.
-            loaded_out = tiled_out_ref[...]
+            # Write the final output to the output ref.
+            tiled_out_ref[...] = acc_masked.astype(tiled_out_ref.dtype)
 
-            # Overwrite ONLY the rows we own, and keep the old values for rows we don't own.
-            # This avoids destroying results from other experts sharing the same sublane.
-            mask_3d = mask.reshape(tiled_out_ref.shape)
-            tiled_out_ref[...] = jnp.where(mask_3d, acc_masked, loaded_out).astype(tiled_out_ref.dtype)
+            # If this is the first tile for grid[n_id, :, :], we initialize the
+            # partial out to zeros. Otherwise, partial out from last tile of
+            # grid[n_id-1, :, :] can be used and cause numeric issues.
+            partial_out_zeros = jnp.zeros_like(partial_out_ref)
+
+            # Accumulate the partial output from the previous step.
+            tiled_out_ref[0] += jnp.where(gm_id == 0, partial_out_zeros, partial_out_ref[...])
+
+            # Consider following case where size_lhs_sublane = 4, number denotes group
+            # id and | denotes boundaries between sublanes:
+            # | 0 0 1 2 | 2 2 2 2 | 3 3 4 4 |
+            #
+            # Assuming group id of current step is 1, current step will not completely
+            # fill size_lhs_sublane rows and will be revisited at the next step. By
+            # storing the partial rows into the partial_out_ref, the next step can
+            # read them and accumulate to them.  Additionally, for group id of 2,
+            # since it completely fills the size_lhs_sublane rows, we need to zero out
+            # partial_out_ref to avoid numeric error for group 3.
+            last_row = m_end_local // cfgs.dims.size_lhs_sublane
+            partial_out_ref[...] = jnp.where(
+                m_end_local % cfgs.dims.size_lhs_sublane == 0,
+                partial_out_zeros,
+                tiled_out_ref[last_row],
+            )
         else:
             acc_ref[...] = acc
 
@@ -974,7 +989,6 @@ def gmm_v2(
     return pl.pallas_call(
         functools.partial(kernel_main, cfgs=cfgs),
         out_shape=out_init,
-        interpret=True,
         grid_spec=pltpu.PrefetchScalarGridSpec(
             num_scalar_prefetch=2,
             in_specs=[
