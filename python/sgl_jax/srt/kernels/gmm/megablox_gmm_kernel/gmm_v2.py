@@ -202,6 +202,8 @@ def inner_kernel(
     def _matmul(is_first_k_step: bool, is_last_k_step: bool):
         tiled_lhs = tiled_lhs_ref.reshape(-1, cfgs.tiles.tile_k)[...]
         tiled_rhs = tiled_rhs_ref.weight[...]
+        pl.debug_print("tiled_lhs[0, 0]: {}", tiled_lhs[0, 0])
+        pl.debug_print("tiled_rhs[0, 0]: {}", tiled_rhs[0, 0])
 
         valid_k = cfgs.dims.size_k % cfgs.tiles.tile_k
         if is_last_k_step and valid_k != 0:
@@ -274,6 +276,8 @@ def inner_kernel(
 
         if not is_first_k_step:
             acc += acc_ref[...]
+
+        pl.debug_check(jnp.logical_not(jnp.any(jnp.isnan(acc))), "NaN detected in acc")
 
         if is_last_k_step:
             if cfgs.rhs_cfgs.has_scale:
