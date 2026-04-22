@@ -497,6 +497,10 @@ class TokenizerManager:
                         ) from e
                 continue
 
+            if not state.out_list:
+                state.event.clear()
+                continue
+
             out = state.out_list[-1]
 
             state.out_list = []
