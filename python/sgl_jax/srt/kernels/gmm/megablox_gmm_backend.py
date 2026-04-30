@@ -63,11 +63,11 @@ def gmm(
 
     use_gmm_v2 = not interpret and is_supported_by_gmm_v2(rhs_scale)
 
-    # Pad LHS to multiple of 128 on TPU to avoid small/unaligned tiles
+    # Pad LHS to multiple of 32 on TPU to avoid small/unaligned tiles
     m = lhs.shape[0]
     pad_size = 0
-    if not interpret and m % 128 != 0:
-        pad_size = 128 - (m % 128)
+    if not interpret and m % 32 != 0:
+        pad_size = 32 - (m % 32)
         lhs = jnp.pad(lhs, ((0, pad_size), (0, 0)))
         group_sizes = group_sizes.at[-1].add(pad_size)
 
