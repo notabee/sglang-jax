@@ -99,27 +99,37 @@ def xla_quantized_matmul_local(
 
     else:
         # === Standard Per-Channel Quantization Path ===
-        if quantize_activation:
-            x_q, x_scale = quantize_tensor_simple(x, act_quant_dtype, dim=-1)
-            out = lax.dot_general(
-                x_q,
-                w_q,
-                dimension_numbers=(((1,), (1,)), ((), ())),
-                preferred_element_type=compute_dtype,
-            )
-            out = (
-                out.astype(compute_dtype)
-                * x_scale.astype(compute_dtype)
-                * jnp.expand_dims(w_scale, 0).astype(compute_dtype)
-            )
-        else:
-            out = lax.dot_general(
-                x,
-                w_q,
-                dimension_numbers=(((1,), (1,)), ((), ())),
-                preferred_element_type=compute_dtype,
-            )
-            out = out.astype(compute_dtype) * jnp.expand_dims(w_scale, 0).astype(compute_dtype)
+        # Hack: Use blockwise kernel for activations on the fly to avoid global reduction
+        out_dim, in_dim = w_q.shape
+        block_size_in = 128
+        in_blocks = in_dim // block_size_in
+        
+        # Expand w_scale from [out_dim] to [in_blocks, 1, out_dim]
+        expanded_w_scale = jnp.repeat(w_scale[None, None, :], in_blocks, axis=0)
+        
+        blockwise_kernel = get_blockwise_kernel()
+        if blockwise_kernel is None:
+            raise RuntimeError("Blockwise kernel failed to load.")
+            
+        x_q_dtype = act_quant_dtype if quantize_activation else x.dtype
+        
+        tuned_value = get_safe_blockwise_tuned_value(
+            n_batch=int(x.shape[0]),
+            n_out=int(out_dim),
+            n_in=int(in_dim),
+            x_q_dtype=x_q_dtype,
+            w_q_dtype=w_q.dtype,
+            block_size_in=block_size_in,
+        )
+        
+        out = blockwise_kernel(
+            x=x,
+            w_q=w_q,
+            w_scale=expanded_w_scale,
+            block_size=block_size_in,
+            x_q_dtype=x_q_dtype,
+            tuned_value=tuned_value,
+        )
 
     out = out.astype(out_dtype)
     # Sum partial results across devices (single all-reduce)
