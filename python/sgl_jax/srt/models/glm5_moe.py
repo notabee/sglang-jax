@@ -187,8 +187,8 @@ class Glm5Attention(nnx.Module):
             scope_name="indexer",
         )
         self.rotary_emb = RotaryEmbedding(
-            head_size=rotary_dim,
-            rotary_dim=rotary_dim,
+            head_size=64,  # GLM-5 qk_rope_head_dim is 64
+            rotary_dim=64,
             max_position_embeddings=max_position_embeddings,
             base=rope_theta,
             is_neox_style=True,
