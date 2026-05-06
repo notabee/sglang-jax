@@ -824,17 +824,17 @@ class Glm5ForCausalLM(nnx.Module):
             mappings[f"{prefix}.mlp.gate_proj.weight"] = WeightMapping(
                 target_path=f"{target_prefix}.mlp.gate_proj.{w_name}",
                 sharding=(None, "tensor"),
-                transpose=False,
+                transpose=True,
             )
             mappings[f"{prefix}.mlp.up_proj.weight"] = WeightMapping(
                 target_path=f"{target_prefix}.mlp.up_proj.{w_name}",
                 sharding=(None, "tensor"),
-                transpose=False,
+                transpose=True,
             )
             mappings[f"{prefix}.mlp.down_proj.weight"] = WeightMapping(
                 target_path=f"{target_prefix}.mlp.down_proj.{w_name}",
                 sharding=("tensor", None),
-                transpose=False,
+                transpose=True,
             )
             if is_static_quant:
                 mappings[f"{prefix}.mlp.gate_proj.weight_scale_inv"] = WeightMapping(
@@ -923,17 +923,17 @@ class Glm5ForCausalLM(nnx.Module):
                 mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight"] = WeightMapping(
                     target_path=f"{target_prefix}.shared_experts.gate_proj.{w_name}",
                     sharding=(None, "tensor"),
-                    transpose=False,
+                    transpose=True,
                 )
                 mappings[f"{prefix}.mlp.shared_experts.up_proj.weight"] = WeightMapping(
                     target_path=f"{target_prefix}.shared_experts.up_proj.{w_name}",
                     sharding=(None, "tensor"),
-                    transpose=False,
+                    transpose=True,
                 )
                 mappings[f"{prefix}.mlp.shared_experts.down_proj.weight"] = WeightMapping(
                     target_path=f"{target_prefix}.shared_experts.down_proj.{w_name}",
                     sharding=("tensor", None),
-                    transpose=False,
+                    transpose=True,
                 )
                 if is_static_quant:
                     mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale_inv"] = WeightMapping(
