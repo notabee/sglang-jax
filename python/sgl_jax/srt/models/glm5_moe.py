@@ -168,6 +168,24 @@ class Glm5Attention(nnx.Module):
             mesh=mesh,
             scope_name="kv_b_proj",
         )
+        
+        self.use_absorbed = True
+        uk_axes = (None, "tensor", None)
+        self.w_uk = nnx.Param(
+            jnp.zeros(
+                (512, num_heads, 192),
+                dtype=dtype,
+                out_sharding=P(*uk_axes),
+            )
+        )
+        self.w_uv = nnx.Param(
+            jnp.zeros(
+                (512, num_heads, 256),
+                dtype=dtype,
+                out_sharding=P(*uk_axes),
+            )
+        )
+
         self.o_proj = LinearBase(
             input_size=num_heads * 256, # num_heads * v_head_dim
             output_size=hidden_size,
@@ -197,11 +215,24 @@ class Glm5Attention(nnx.Module):
         )
         self.attn = RadixAttention(
             num_heads=num_heads,
-            head_dim=256,
+            head_dim=512 + 64,  # kv_lora_rank + qk_rope_head_dim
             scaling=self.scaling,
-            num_kv_heads=num_kv_heads,
+            num_kv_heads=1,
+            v_head_dim=512,  # kv_lora_rank
             layer_id=layer_id,
         )
+
+    def post_load_weights(self):
+        if not self.use_absorbed:
+            return
+        w_kv = self.kv_b_proj.weight.value.reshape(
+            512,
+            self.q_head_num,
+            192 + 256,
+        )
+        self.w_uk.value = w_kv[:, :, : 192]
+        self.w_uv.value = w_kv[:, :, 192 :]
+        self.kv_b_proj = None
 
     def __call__(
         self,
@@ -220,9 +251,6 @@ class Glm5Attention(nnx.Module):
         latent_cache, _ = self.kv_a_proj_with_mqa(hidden_states)
         kv_a, k_pe = jnp.split(latent_cache, [512], axis=-1) # 512 is kv_lora_rank
         kv_a = self.kv_a_layernorm(kv_a)
-        kv, _ = self.kv_b_proj(kv_a)
-        kv = kv.reshape(-1, self.q_head_num, 192 + 256) # 192 qk_nope, 256 v_head_dim
-        k_nope, v = jnp.split(kv, [192], axis=-1)
         
         # 3. Apply RoPE
         q_nope, q_pe = jnp.split(q, [192], axis=-1)
@@ -230,24 +258,28 @@ class Glm5Attention(nnx.Module):
         
         q_pe, k_pe = self.rotary_emb(positions, q_pe, k_pe)
         
-        # Combine Q and K
-        q = jnp.concatenate([q_nope, q_pe], axis=-1)
-        k_pe_repeated = k_pe.repeat(self.q_head_num, axis=1)
-        k_pe_repeated = jax.sharding.reshard(
-            k_pe_repeated, NamedSharding(self.mesh, P("data", "tensor", None))
-        )
-        k = jnp.concatenate([k_nope, k_pe_repeated], axis=-1)
-        if self.use_qk_norm:
-            q = self.q_norm(q)
-            k = self.k_norm(k)
-
+        # Absorbed MLA: fold W_UK into Q
+        ql_nope = jnp.einsum("thd,rhd->thr", q_nope, self.w_uk.value)
+        
+        # Latent K/V are a single shared head — pack into [T, 1, *] for MQA.
+        c_kv_3d = kv_a[:, None, :]
+        
         # 4. Attention
-        attn_output, kv_fused = self.attn(
-            q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
+        o_latent, kv_fused = self.attn(
+            ql_nope,
+            c_kv_3d,
+            c_kv_3d,
+            forward_batch=forward_batch,
+            token_to_kv_pool=token_to_kv_pool,
+            q_rope=q_pe,
+            k_rope=k_pe,
         )
         
+        # o_v[t, h, d] = sum_r o_latent[t, h, r] * w_uv[r, h, d]
+        o_v = jnp.einsum("thr,rhd->thd", o_latent, self.w_uv.value)
+        attn_output = o_v.reshape(-1, self.q_head_num * 256) # 256 is v_head_dim
+        
         # 5. Output projection
-        attn_output = attn_output.reshape(-1, self.q_head_num * 256)
         output, _ = self.o_proj(attn_output)
         
         return output, kv_fused
@@ -602,6 +634,10 @@ class Glm5ForCausalLM(nnx.Module):
         weight_mappings = self._create_glm5_weight_mappings(model_config)
         loader.load_weights_from_safetensors(weight_mappings)
         
+        # Absorbed MLA post-load split
+        for layer in self.model.layers:
+            layer.self_attn.post_load_weights()
+            
         # Invert scales because checkpoint provides weight_scale_inv
         logger.info("Inverting weight scales...")
         for layer in self.model.layers:
@@ -613,7 +649,7 @@ class Glm5ForCausalLM(nnx.Module):
                     attn.q_b_proj.weight_scale.value = 1.0 / attn.q_b_proj.weight_scale.value
                 if attn.kv_a_proj_with_mqa.weight_scale is not None:
                     attn.kv_a_proj_with_mqa.weight_scale.value = 1.0 / attn.kv_a_proj_with_mqa.weight_scale.value
-                if attn.kv_b_proj.weight_scale is not None:
+                if attn.kv_b_proj is not None and attn.kv_b_proj.weight_scale is not None:
                     attn.kv_b_proj.weight_scale.value = 1.0 / attn.kv_b_proj.weight_scale.value
                 if attn.o_proj.weight_scale is not None:
                     attn.o_proj.weight_scale.value = 1.0 / attn.o_proj.weight_scale.value
