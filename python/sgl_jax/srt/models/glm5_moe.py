@@ -607,7 +607,7 @@ class Glm5ForCausalLM(nnx.Module):
         # Reshard to replicate across devices to avoid sharding errors in top_k
         logits_first = jax.sharding.reshard(logits[0], NamedSharding(self.mesh, P(None)))
         top_vals, top_ids = jax.lax.top_k(logits_first, k=5)
-        jax.debug.callback(lambda v, i: print(f"DEBUG: Top logits: {v}, IDs: {i}"), top_vals, top_ids)
+        jax.debug.callback(lambda v, i: print(f"DEBUG: Top logits: {v}, IDs: {i}", flush=True), top_vals, top_ids)
              
         return output, layers_kv_fused, True, layers_topk_ids
 
