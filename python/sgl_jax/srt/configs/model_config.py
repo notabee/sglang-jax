@@ -172,6 +172,11 @@ class ModelConfig:
             "head_dim",
             self.hf_text_config.hidden_size // self.hf_text_config.num_attention_heads,
         )
+        
+        # GLM-5 uses 256 for attention head dim (192 nope + 64 pe)
+        if self.hf_config.architectures[0] in ["Glm5ForCausalLM", "GlmMoeDsaForCausalLM"]:
+            self.head_dim = 256
+            
         self.v_head_dim = getattr(self.hf_text_config, "v_head_dim", self.head_dim)
         self.attention_arch = AttentionArch.MHA
         self._apply_model_specific_config()
