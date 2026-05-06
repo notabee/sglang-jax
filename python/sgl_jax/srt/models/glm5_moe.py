@@ -718,7 +718,7 @@ class Glm5ForCausalLM(nnx.Module):
         mappings[f"{prefix}.self_attn.q_a_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.q_a_proj.{w_name}",
             sharding=(None, None),
-            transpose=False,
+            transpose=True,
         )
         mappings[f"{prefix}.self_attn.q_a_layernorm.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.q_a_layernorm.scale",
@@ -727,12 +727,12 @@ class Glm5ForCausalLM(nnx.Module):
         mappings[f"{prefix}.self_attn.q_b_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.q_b_proj.{w_name}",
             sharding=(None, "tensor"),
-            transpose=False,
+            transpose=True,
         )
         mappings[f"{prefix}.self_attn.kv_a_proj_with_mqa.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.kv_a_proj_with_mqa.{w_name}",
             sharding=(None, None),
-            transpose=False,
+            transpose=True,
         )
         mappings[f"{prefix}.self_attn.kv_a_layernorm.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.kv_a_layernorm.scale",
@@ -741,29 +741,29 @@ class Glm5ForCausalLM(nnx.Module):
         mappings[f"{prefix}.self_attn.kv_b_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.kv_b_proj.{w_name}",
             sharding=(None, "tensor"),
-            transpose=False,
+            transpose=True,
         )
         mappings[f"{prefix}.self_attn.o_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.o_proj.{w_name}",
             sharding=("tensor", None),
-            transpose=False,
+            transpose=True,
         )
 
         # Indexer mappings
         mappings[f"{prefix}.self_attn.indexer.wq_b.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.indexer.wq_b.{w_name}",
             sharding=(None, None),
-            transpose=False,
+            transpose=True,
         )
         mappings[f"{prefix}.self_attn.indexer.wk.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.indexer.wk.{w_name}",
             sharding=(None, None),
-            transpose=False,
+            transpose=True,
         )
         mappings[f"{prefix}.self_attn.indexer.weights_proj.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.indexer.weights_proj.{w_name}",
             sharding=(None, None),
-            transpose=False,
+            transpose=True,
         )
         mappings[f"{prefix}.self_attn.indexer.k_norm.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.indexer.k_norm.weight",
