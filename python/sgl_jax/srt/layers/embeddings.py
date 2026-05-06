@@ -230,7 +230,8 @@ class RotaryEmbedding:
 
         query_shape = query.shape
         num_tokens = positions.shape[0]
-        query = query.reshape(num_tokens, -1, self.head_size)
+        out_sharding = NamedSharding(query.sharding.mesh, P("data", "tensor", None))
+        query = jax.lax.reshape(query, (num_tokens, -1, self.head_size), None, out_sharding=out_sharding)
         query_rot = query[..., : self.rotary_dim]
         query_rot = apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
         if self.rotary_dim < self.head_size:
@@ -240,7 +241,8 @@ class RotaryEmbedding:
             query = query_rot.reshape(query_shape)
 
         key_shape = key.shape
-        key = key.reshape(num_tokens, -1, self.head_size)
+        out_sharding = NamedSharding(key.sharding.mesh, P("data", "tensor", None))
+        key = jax.lax.reshape(key, (num_tokens, -1, self.head_size), None, out_sharding=out_sharding)
         key_rot = key[..., : self.rotary_dim]
         key_rot = apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
         if self.rotary_dim < self.head_size:
