@@ -604,7 +604,9 @@ class Glm5ForCausalLM(nnx.Module):
         logits = getattr(logits, "next_token_logits", logits)
         
         # Get top 5 logits for the first token in the batch
-        top_vals, top_ids = jax.lax.top_k(logits[0], k=5)
+        # Reshard to replicate across devices to avoid sharding errors in top_k
+        logits_first = jax.sharding.reshard(logits[0], NamedSharding(self.mesh, P(None)))
+        top_vals, top_ids = jax.lax.top_k(logits_first, k=5)
         jax.debug.callback(lambda v, i: print(f"DEBUG: Top logits: {v}, IDs: {i}"), top_vals, top_ids)
              
         return output, layers_kv_fused, True, layers_topk_ids
