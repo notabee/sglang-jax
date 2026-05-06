@@ -193,6 +193,7 @@ class Glm5Attention(nnx.Module):
             base=rope_theta,
             is_neox_style=True,
             dtype=dtype,
+            mesh=mesh,
         )
         self.attn = RadixAttention(
             num_heads=num_heads,

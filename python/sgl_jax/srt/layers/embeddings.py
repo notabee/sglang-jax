@@ -200,6 +200,7 @@ class RotaryEmbedding:
         base: int,
         is_neox_style: bool,
         dtype: jnp.dtype,
+        mesh: jax.sharding.Mesh | None = None,
     ):
         self.head_size = head_size
         self.rotary_dim = rotary_dim
@@ -207,6 +208,7 @@ class RotaryEmbedding:
         self.base = base
         self.is_neox_style = is_neox_style
         self.dtype = dtype
+        self.mesh = mesh
 
         inv_freq_np = 1.0 / (base ** (np.arange(0, rotary_dim, 2, dtype=np.float32) / rotary_dim))
         self._inv_freq_np = inv_freq_np  # shape: (rotary_dim // 2,)
@@ -230,7 +232,7 @@ class RotaryEmbedding:
 
         query_shape = query.shape
         num_tokens = positions.shape[0]
-        out_sharding = NamedSharding(query.sharding.mesh, P("data", "tensor", None))
+        out_sharding = NamedSharding(self.mesh, P("data", "tensor", None))
         query = jax.lax.reshape(query, (num_tokens, -1, self.head_size), None, out_sharding=out_sharding)
         query_rot = query[..., : self.rotary_dim]
         query_rot = apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
@@ -241,7 +243,7 @@ class RotaryEmbedding:
             query = query_rot.reshape(query_shape)
 
         key_shape = key.shape
-        out_sharding = NamedSharding(key.sharding.mesh, P("data", "tensor", None))
+        out_sharding = NamedSharding(self.mesh, P("data", "tensor", None))
         key = jax.lax.reshape(key, (num_tokens, -1, self.head_size), None, out_sharding=out_sharding)
         key_rot = key[..., : self.rotary_dim]
         key_rot = apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
