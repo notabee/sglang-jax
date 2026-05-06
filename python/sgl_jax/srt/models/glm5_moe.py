@@ -602,6 +602,17 @@ class Glm5ForCausalLM(nnx.Module):
         weight_mappings = self._create_glm5_weight_mappings(model_config)
         loader.load_weights_from_safetensors(weight_mappings)
         
+        # Debug prints for weights
+        try:
+            layer0 = self.model.layers[0]
+            attn0 = layer0.self_attn
+            logger.info(f"DEBUG: Layer 0 q_a_proj weight mean: {attn0.q_a_proj.weight.value.mean()}")
+            logger.info(f"DEBUG: Layer 0 q_a_proj weight std: {attn0.q_a_proj.weight.value.std()}")
+            logger.info(f"DEBUG: Layer 0 kv_b_proj weight mean: {attn0.kv_b_proj.weight.value.mean()}")
+            logger.info(f"DEBUG: Layer 0 kv_b_proj weight std: {attn0.kv_b_proj.weight.value.std()}")
+        except Exception as e:
+            logger.info(f"DEBUG: Failed to print weights: {e}")
+        
         # Invert scales because checkpoint provides weight_scale_inv
         logger.info("Inverting weight scales...")
         for layer in self.model.layers:
