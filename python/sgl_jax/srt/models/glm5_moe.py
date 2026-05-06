@@ -26,8 +26,13 @@ from sgl_jax.srt.layers.radix_attention import RadixAttention
 from sgl_jax.srt.mem_cache.memory_pool import KVCache
 from sgl_jax.srt.model_executor.forward_batch_info import ForwardBatch
 from sgl_jax.srt.utils.weight_utils import WeightLoader, WeightMapping
+from jax.experimental import io_callback
 
 logger = logging.getLogger(__name__)
+
+def _log_logits(vals, ids):
+    logger.info(f"DEBUG: Top logits: {vals}, IDs: {ids}")
+    return 0.0
 
 class GlmNorm(nnx.Module):
     def __init__(self, dim: int, dtype: jnp.dtype = jnp.bfloat16):
@@ -601,9 +606,9 @@ class Glm5ForCausalLM(nnx.Module):
             
             # Get top 5 logits for the first token in the batch
             top_vals, top_ids = jax.lax.top_k(logits[0], k=5)
-            jax.debug.print("DEBUG: Top logits: {vals}, IDs: {ids}", vals=top_vals, ids=top_ids)
+            dummy = io_callback(_log_logits, jax.ShapeDtypeStruct((), jnp.float32), top_vals, top_ids)
         except Exception as e:
-            jax.debug.print("DEBUG: Failed to print logits")
+            pass
              
         return output, layers_kv_fused, True, layers_topk_ids
 
