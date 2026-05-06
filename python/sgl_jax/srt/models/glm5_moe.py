@@ -234,7 +234,7 @@ class Glm5Attention(nnx.Module):
         q = jnp.concatenate([q_nope, q_pe], axis=-1)
         k_pe_repeated = k_pe.repeat(self.q_head_num, axis=1)
         k_pe_repeated = jax.sharding.reshard(
-            k_pe_repeated, NamedSharding(self.mesh, P(None, "tensor", None))
+            k_pe_repeated, NamedSharding(self.mesh, P("data", "tensor", None))
         )
         k = jnp.concatenate([k_nope, k_pe_repeated], axis=-1)
         if self.use_qk_norm:
