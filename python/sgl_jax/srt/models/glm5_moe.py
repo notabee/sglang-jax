@@ -590,6 +590,19 @@ class Glm5ForCausalLM(nnx.Module):
             output = self.logits_processor(hidden_states, self.lm_head, logits_metadata)
         else:
             output = self.logits_processor(hidden_states, self.model.embed_tokens, logits_metadata)
+            
+        # Debug prints for logits
+        try:
+            logits = output
+            if isinstance(logits, tuple):
+                logits = logits[0]
+            
+            # Get top 5 logits for the first token in the batch
+            top_vals, top_ids = jax.lax.top_k(logits[0], k=5)
+            jax.debug.print("DEBUG: Top logits: {vals}, IDs: {ids}", vals=top_vals, ids=top_ids)
+        except Exception as e:
+            jax.debug.print("DEBUG: Failed to print logits")
+             
         return output, layers_kv_fused, True, layers_topk_ids
 
     def load_weights(self, model_config: ModelConfig):
