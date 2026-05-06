@@ -597,6 +597,8 @@ class Glm5ForCausalLM(nnx.Module):
             if isinstance(logits, tuple):
                 logits = logits[0]
             
+            logits = getattr(logits, "next_token_logits", logits)
+            
             # Get top 5 logits for the first token in the batch
             top_vals, top_ids = jax.lax.top_k(logits[0], k=5)
             jax.debug.print("DEBUG: Top logits: {vals}, IDs: {ids}", vals=top_vals, ids=top_ids)
