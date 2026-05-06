@@ -458,12 +458,12 @@ def _ragged_paged_attention_kernel_loop(
                 q = jnp.clip(q, min=minval, max=maxval)
             q = q.astype(k.dtype)
 
-        pl.debug_print("DEBUG: q max={x}", x=jnp.max(q))
-        pl.debug_print("DEBUG: k max={x}", x=jnp.max(k))
+        pl.debug_print("DEBUG: q max=%f", jnp.max(q))
+        pl.debug_print("DEBUG: k max=%f", jnp.max(k))
         
         s = jnp.matmul(q, k.T, preferred_element_type=jnp.float32)
         
-        pl.debug_print("DEBUG: s max before scale={x}", x=jnp.max(s))
+        pl.debug_print("DEBUG: s max before scale=%f", jnp.max(s))
 
         s_scale = sm_scale
         if k_scale is not None:
@@ -473,7 +473,7 @@ def _ragged_paged_attention_kernel_loop(
 
         s *= s_scale
         
-        pl.debug_print("DEBUG: s max after scale={x}", x=jnp.max(s))
+        pl.debug_print("DEBUG: s max after scale=%f", jnp.max(s))
 
         # xai temperature scaling
         if xai_temperature_reg is not None:
@@ -481,7 +481,7 @@ def _ragged_paged_attention_kernel_loop(
 
         if soft_cap is not None:
             s = soft_cap * jnp.tanh(s / soft_cap)
-            pl.debug_print("DEBUG: s max after soft_cap={x}", x=jnp.max(s))
+            pl.debug_print("DEBUG: s max after soft_cap=%f", jnp.max(s))
 
         # Use int16 for span computations when safe: non-f32 dtype on TPU v6+
         # with causal mask. Custom mask shapes can trigger a Mosaic compiler bug.
