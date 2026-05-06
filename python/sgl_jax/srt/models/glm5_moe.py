@@ -606,9 +606,9 @@ class Glm5ForCausalLM(nnx.Module):
             
             # Get top 5 logits for the first token in the batch
             top_vals, top_ids = jax.lax.top_k(logits[0], k=5)
-            dummy = io_callback(_log_logits, jax.ShapeDtypeStruct((), jnp.float32), top_vals, top_ids)
+            jax.debug.print("DEBUG: Top logits: {vals}, IDs: {ids}", vals=top_vals, ids=top_ids, ordered=True)
         except Exception as e:
-            pass
+            jax.debug.print("DEBUG: Failed to print logits")
              
         return output, layers_kv_fused, True, layers_topk_ids
 
