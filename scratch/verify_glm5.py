@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from flax import nnx
 from sgl_jax.srt.models.glm5_moe import Glm5Attention
 from sgl_jax.srt.utils.mesh_utils import create_device_mesh
-from sgl_jax.srt.layers.attention.flashattention_backend import FlashAttention
+from sgl_jax.srt.layers.attention.mla_backend import MLAAttentionBackend
 import safetensors.numpy as st_np
 
 def test_with_real_weights():
@@ -92,12 +92,14 @@ def test_with_real_weights():
             positions = jnp.arange(seq_len, dtype=jnp.int32)
             positions = jnp.tile(positions, batch_size)
             
-            # Create real FlashAttention backend
-            print("Creating real FlashAttention backend...")
-            attn_backend = FlashAttention(
+            # Create real MLAAttentionBackend
+            print("Creating real MLAAttentionBackend...")
+            attn_backend = MLAAttentionBackend(
                 num_attn_heads=64,
-                num_kv_heads=64,
-                head_dim=256, # Must be 256 for GLM-5 MLA!
+                kv_lora_rank=512,
+                qk_nope_head_dim=192,
+                qk_rope_head_dim=64,
+                v_head_dim=256,
                 page_size=1,
                 mesh=mesh,
             )
@@ -109,7 +111,8 @@ def test_with_real_weights():
                     self.cu_kv_lens = jnp.array([0, 10, 20], dtype=jnp.int32)
                     self.page_indices = jnp.array([0, 1], dtype=jnp.int32)
                     self.seq_lens = jnp.array([10, 10], dtype=jnp.int32)
-                    self.distribution = jnp.array([0, 2, 2], dtype=jnp.int32)
+                    # MLA backend expects [0, 0, num_seqs] for extend!
+                    self.distribution = jnp.array([0, 0, 2], dtype=jnp.int32)
                     self.custom_mask = None
                     
             attn_backend.forward_metadata = DummyMetadata()
@@ -119,9 +122,16 @@ def test_with_real_weights():
                     self.attn_backend = attn_backend
                     
             forward_batch = DummyForwardBatch()
-            token_to_kv_pool = None 
             
-            print("Running forward pass with real weights and real attention backend...")
+            # Dummy KVCache that returns 4D buffer
+            class DummyKVCache:
+                def get_fused_kv_buffer(self, layer_id):
+                    # Shape: [pages, page_size, packing, dim]
+                    return jnp.zeros((1, 1, 1, 512 + 64), dtype=jnp.bfloat16)
+                    
+            token_to_kv_pool = DummyKVCache()
+            
+            print("Running forward pass with real weights and MLA attention backend...")
             output, kv_fused = jax_attn(positions, hidden_states, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool)
             print("Forward pass successful!")
             print(f"Output shape: {output.shape}")
