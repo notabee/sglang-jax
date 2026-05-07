@@ -12,6 +12,7 @@ import jax.numpy as jnp
 from flax import nnx
 from sgl_jax.srt.models.glm5_moe import Glm5Attention
 from sgl_jax.srt.utils.mesh_utils import create_device_mesh
+from sgl_jax.srt.layers.attention.flashattention_backend import FlashAttention
 import safetensors.numpy as st_np
 
 def test_with_real_weights():
@@ -30,10 +31,6 @@ def test_with_real_weights():
     attn_weights = {k[len(prefix):]: v for k, v in weights.items() if k.startswith(prefix)}
     print(f"Found {len(attn_weights)} weights for Layer 0 Attention.")
     
-    print("Keys in checkpoint:")
-    for k in sorted(attn_weights.keys()):
-        print(f"  {k}: {attn_weights[k].shape}")
-
     # GLM-5.1 Config values
     hidden_size = 6144
     num_heads = 64
@@ -95,27 +92,42 @@ def test_with_real_weights():
             positions = jnp.arange(seq_len, dtype=jnp.int32)
             positions = jnp.tile(positions, batch_size)
             
-            # Create a dummy ForwardBatch
-            class DummyAttnBackend:
-                def __call__(self, q, k, v, *args, **kwargs):
-                    print(f"DEBUG: q shape in backend: {q.shape}, max: {jnp.max(jnp.abs(q))}")
-                    print(f"DEBUG: k shape in backend: {k.shape}, max: {jnp.max(jnp.abs(k))}")
-                    print(f"DEBUG: v shape in backend: {v.shape}, max: {jnp.max(jnp.abs(v))}")
-                    return jnp.zeros((q.shape[0], 64, 256), dtype=jnp.bfloat16), None
-
+            # Create real FlashAttention backend
+            print("Creating real FlashAttention backend...")
+            attn_backend = FlashAttention(
+                num_attn_heads=64,
+                num_kv_heads=64,
+                head_dim=256, # Must be 256 for GLM-5 MLA!
+                page_size=1,
+                mesh=mesh,
+            )
+            
+            # Mock metadata for prefill (EXTEND) mode
+            class DummyMetadata:
+                def __init__(self):
+                    self.cu_q_lens = jnp.array([0, 10, 20], dtype=jnp.int32)
+                    self.cu_kv_lens = jnp.array([0, 10, 20], dtype=jnp.int32)
+                    self.page_indices = jnp.array([0, 1], dtype=jnp.int32)
+                    self.seq_lens = jnp.array([10, 10], dtype=jnp.int32)
+                    self.distribution = jnp.array([0, 2, 2], dtype=jnp.int32)
+                    self.custom_mask = None
+                    
+            attn_backend.forward_metadata = DummyMetadata()
 
             class DummyForwardBatch:
                 def __init__(self):
-                    self.attn_backend = DummyAttnBackend()
+                    self.attn_backend = attn_backend
                     
             forward_batch = DummyForwardBatch()
             token_to_kv_pool = None 
             
-            print("Running forward pass with real weights...")
+            print("Running forward pass with real weights and real attention backend...")
             output, kv_fused = jax_attn(positions, hidden_states, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool)
             print("Forward pass successful!")
             print(f"Output shape: {output.shape}")
             print(f"Any NaNs in output: {jnp.isnan(output).any()}")
+            if not jnp.isnan(output).any():
+                print(f"Output max: {jnp.max(jnp.abs(output))}")
             
     except Exception as e:
         print(f"Failed during verification: {e}")
