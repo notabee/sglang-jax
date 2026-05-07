@@ -423,7 +423,7 @@ class Glm5DecoderLayer(nnx.Module):
                     num_experts_per_tok=config.num_experts_per_tok,
                     intermediate_dim=config.moe_intermediate_size,
                     mesh=mesh,
-                    ep_size=1, # Default to 1 for now
+                    ep_size=getattr(config, "ep_size", 1),
                     weight_dtype=dtype,
                     dtype=dtype,
                     layer_id=layer_id,
@@ -443,7 +443,7 @@ class Glm5DecoderLayer(nnx.Module):
                     num_experts_per_tok=config.num_experts_per_tok,
                     intermediate_dim=config.moe_intermediate_size,
                     mesh=mesh,
-                    ep_size=1, # Default to 1 for now
+                    ep_size=getattr(config, "ep_size", 1),
                     weight_dtype=dtype,
                     dtype=dtype,
                     layer_id=layer_id,
