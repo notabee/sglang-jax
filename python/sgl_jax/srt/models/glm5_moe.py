@@ -42,6 +42,12 @@ class GlmNorm(nnx.Module):
 
 
 
+def get_hadamard_matrix(n):
+    if n == 1:
+        return jnp.array([[1.0]])
+    h = get_hadamard_matrix(n // 2)
+    return jnp.block([[h, h], [h, -h]])
+
 class GlmDsaIndexer(nnx.Module):
     def __init__(
         self,
@@ -88,7 +94,7 @@ class GlmDsaIndexer(nnx.Module):
             scope_name="weights_proj",
         )
 
-    def __call__(self, hidden_states: jax.Array, qr: jax.Array) -> jax.Array:
+    def __call__(self, hidden_states: jax.Array, qr: jax.Array, positions: jax.Array, rotary_emb: Any) -> jax.Array:
         # 1. Project Query and Key
         query, _ = self.wq_b(qr)
         query = query.reshape(-1, self.n_head, self.head_dim)
@@ -96,11 +102,28 @@ class GlmDsaIndexer(nnx.Module):
         key, _ = self.wk(hidden_states)
         key = self.k_norm(key)
         
+        # Apply RoPE
+        rope_dim = 64
+        q_rope = query[:, :, :rope_dim]
+        k_rope = key[:, :rope_dim]
+        k_rope = k_rope[:, None, :] # Add head dim for RoPE
+        
+        q_rope, k_rope = rotary_emb(positions, q_rope, k_rope)
+        k_rope = k_rope.squeeze(1) # Remove head dim
+        
+        query = query.at[:, :, :rope_dim].set(q_rope)
+        key = key.at[:, :rope_dim].set(k_rope)
+        
+        # Apply Hadamard Transform
+        h_matrix = get_hadamard_matrix(128)
+        h_matrix = h_matrix * (128**-0.5)
+        
+        query = jnp.einsum("thd,de->the", query, h_matrix)
+        key = jnp.einsum("td,de->te", key, h_matrix)
+        
         # 2. Compute Logits (simplified dense dot product)
         key_replicated = jax.sharding.reshard(key, jax.sharding.NamedSharding(self.mesh, P(None, None)))
         logits = jnp.einsum("thd,sd->ths", query, key_replicated)
-
-
         
         # 3. Apply weights_proj
         weights, _ = self.weights_proj(hidden_states)
@@ -285,7 +308,7 @@ class Glm5Attention(nnx.Module):
         q = q.reshape(-1, self.q_head_num, self.qk_head_dim)
         
         # Call indexer (result not used yet)
-        _ = self.indexer(hidden_states, q_compressed)
+        _ = self.indexer(hidden_states, q_compressed, positions, self.rotary_emb)
 
         q_nope = q[:, :, : self.qk_nope_head_dim]
 
