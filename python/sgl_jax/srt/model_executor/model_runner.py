@@ -188,11 +188,8 @@ class ModelRunner(ModelRunnerKVCacheMixin, BaseModelRunner):
         # note export for external modification
         self.model_state_leaves, model_state_def = jax.tree_util.tree_flatten(model_state)
         
-        # Workaround: replace ShapeDtypeStruct with concrete arrays for JIT
-        self.model_state_leaves = [
-            jnp.zeros(leaf.shape, dtype=leaf.dtype) if isinstance(leaf, jax.ShapeDtypeStruct) else leaf
-            for leaf in self.model_state_leaves
-        ]
+        # Removed workaround that replaced ShapeDtypeStruct with zeros
+
         sampler_def, sampler_state = nnx.split(self.sampler)
         sampler_state_leaves, sampler_state_def = jax.tree_util.tree_flatten(sampler_state)
 

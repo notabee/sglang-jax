@@ -1892,8 +1892,8 @@ def ragged_paged_attention(
                 grid=(1,),
                 scratch_shapes=scratch_shapes,
             ),
-            debug=True,
             compiler_params=pltpu.CompilerParams(
+
                 dimension_semantics=("arbitrary",),
                 vmem_limit_bytes=vmem_limit_bytes,
                 disable_bounds_checks=True,
