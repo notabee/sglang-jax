@@ -142,7 +142,11 @@ def test_with_real_weights():
             output, kv_fused = jax_attn(positions, hidden_states, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool)
             print("Forward pass successful!")
             print(f"Output shape: {output.shape}")
+            print("Forcing execution on TPU (this may take a while or reveal a crash)...")
+            output.block_until_ready()
+            print("Execution completed successfully!")
             print(f"Any NaNs in output: {jnp.isnan(output).any()}")
+
             if not jnp.isnan(output).any():
                 print(f"Output max: {jnp.max(jnp.abs(output))}")
             
