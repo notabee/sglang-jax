@@ -33,6 +33,14 @@ class GlmNorm(nnx.Module):
         self.weight = nnx.Param(jnp.ones((dim,), dtype=dtype))
         self.bias = nnx.Param(jnp.zeros((dim,), dtype=dtype))
 
+    def __call__(self, x: jax.Array) -> jax.Array:
+        mean = jnp.mean(x, axis=-1, keepdims=True)
+        variance = jnp.var(x, axis=-1, keepdims=True)
+        eps = 1e-5
+        normalized = (x - mean) / jnp.sqrt(variance + eps)
+        return normalized * self.weight.value + self.bias.value
+
+
 
 class GlmDsaIndexer(nnx.Module):
     def __init__(
