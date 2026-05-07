@@ -30,9 +30,7 @@ from jax.experimental import io_callback
 
 logger = logging.getLogger(__name__)
 
-def _log_logits(vals, ids):
-    logger.info(f"DEBUG: Top logits: {vals}, IDs: {ids}")
-    return 0.0
+
 
 class GlmNorm(nnx.Module):
     def __init__(self, dim: int, dtype: jnp.dtype = jnp.bfloat16):
@@ -530,7 +528,6 @@ class Glm5Model(nnx.Module):
         token_to_kv_pool: KVCache,
     ) -> jax.Array:
         hidden_states = self.embed_tokens(forward_batch.input_ids)
-        # jax.debug.print("DEBUG: After embed_tokens max: {x}", x=jnp.max(jnp.abs(hidden_states)))
         residual = None
         layers_kv_fused = []
         layers_topk_ids = []
@@ -545,8 +542,6 @@ class Glm5Model(nnx.Module):
             )
             layers_kv_fused.append(kv_fused)
             layers_topk_ids.append(topk_ids)
-            # if i == 30:
-            #     jax.debug.print("DEBUG: After layer 30 max: {x}", x=jnp.max(jnp.abs(hidden_states)))
 
         if residual is not None:
             hidden_states += residual
@@ -589,25 +584,13 @@ class Glm5ForCausalLM(nnx.Module):
             forward_batch,
             token_to_kv_pool,
         )
-        # jax.debug.print("DEBUG: Final hidden_states max: {x}", x=jnp.max(jnp.abs(hidden_states)))
-        # jax.debug.print("DEBUG: Final hidden_states max: {x}", x=jnp.max(jnp.abs(hidden_states)))
+
         if not getattr(self.config, "tie_word_embeddings", False):
             output = self.logits_processor(hidden_states, self.lm_head, logits_metadata)
         else:
             output = self.logits_processor(hidden_states, self.model.embed_tokens, logits_metadata)
             
-        # Debug prints for logits
-        logits = output
-        if isinstance(logits, tuple):
-            logits = logits[0]
-        
-        logits = getattr(logits, "next_token_logits", logits)
-        
-        # Get top 5 logits for the first token in the batch
-        # Reshard to replicate across devices to avoid sharding errors in top_k
-        logits_first = jax.sharding.reshard(logits[0], NamedSharding(self.mesh, P(None)))
-        top_vals, top_ids = jax.lax.top_k(logits_first, k=5)
-        jax.debug.callback(lambda v, i: print(f"DEBUG: Top logits: {v}, IDs: {i}", flush=True), top_vals, top_ids)
+
              
         return output, layers_kv_fused, True, layers_topk_ids
 
@@ -621,16 +604,7 @@ class Glm5ForCausalLM(nnx.Module):
         weight_mappings = self._create_glm5_weight_mappings(model_config)
         loader.load_weights_from_safetensors(weight_mappings)
         
-        # Debug prints for weights
-        try:
-            layer0 = self.model.layers[0]
-            attn0 = layer0.self_attn
-            logger.info(f"DEBUG: Layer 0 q_a_proj weight mean: {attn0.q_a_proj.weight.value.mean()}")
-            logger.info(f"DEBUG: Layer 0 q_a_proj weight std: {attn0.q_a_proj.weight.value.std()}")
-            logger.info(f"DEBUG: Layer 0 kv_b_proj weight mean: {attn0.kv_b_proj.weight.value.mean()}")
-            logger.info(f"DEBUG: Layer 0 kv_b_proj weight std: {attn0.kv_b_proj.weight.value.std()}")
-        except Exception as e:
-            logger.info(f"DEBUG: Failed to print weights: {e}")
+
         
         # Skipping scale inversion for BF16
         logger.info("Skipping scale inversion for BF16 model.")
