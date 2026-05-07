@@ -283,8 +283,12 @@ class Glm5Attention(nnx.Module):
         q_compressed = self.q_a_layernorm(q_compressed)
         q, _ = self.q_b_proj(q_compressed)
         q = q.reshape(-1, self.q_head_num, self.qk_head_dim)
+        
+        # Call indexer (result not used yet)
+        _ = self.indexer(hidden_states, q_compressed)
 
         q_nope = q[:, :, : self.qk_nope_head_dim]
+
         q_rope = q[:, :, self.qk_nope_head_dim :]
 
         # 2. KV projection (latent)
