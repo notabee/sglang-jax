@@ -97,8 +97,12 @@ def test_with_real_weights():
             
             # Create a dummy ForwardBatch
             class DummyAttnBackend:
-                def __call__(self, *args, **kwargs):
-                    return jnp.zeros((20, 64, 256), dtype=jnp.bfloat16), None
+                def __call__(self, q, k, v, *args, **kwargs):
+                    print(f"DEBUG: q shape in backend: {q.shape}, max: {jnp.max(jnp.abs(q))}")
+                    print(f"DEBUG: k shape in backend: {k.shape}, max: {jnp.max(jnp.abs(k))}")
+                    print(f"DEBUG: v shape in backend: {v.shape}, max: {jnp.max(jnp.abs(v))}")
+                    return jnp.zeros((q.shape[0], 64, 256), dtype=jnp.bfloat16), None
+
 
             class DummyForwardBatch:
                 def __init__(self):
