@@ -55,6 +55,8 @@ class GlmDsaIndexer(nnx.Module):
     ):
         self.head_dim = index_head_dim
         self.n_head = index_n_heads
+        self.mesh = mesh
+
 
         self.wq_b = LinearBase(
             input_size=q_lora_rank,
@@ -95,8 +97,9 @@ class GlmDsaIndexer(nnx.Module):
         key = self.k_norm(key)
         
         # 2. Compute Logits (simplified dense dot product)
-        key_replicated = jax.lax.with_sharding_constraint(key, P(None, None))
+        key_replicated = jax.sharding.reshard(key, jax.sharding.NamedSharding(self.mesh, P(None, None)))
         logits = jnp.einsum("thd,sd->ths", query, key_replicated)
+
 
         
         # 3. Apply weights_proj
