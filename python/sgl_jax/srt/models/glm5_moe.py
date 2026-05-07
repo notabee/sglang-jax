@@ -217,19 +217,25 @@ class Glm5Attention(nnx.Module):
         q, _ = self.q_a_proj(hidden_states)
         q = self.q_a_layernorm(q)
         q, _ = self.q_b_proj(q)
+        print(f"DEBUG: q shape before reshape: {q.shape}")
         q = q.reshape(-1, self.q_head_num, 256) # 256 is qk_head_dim
+
         
         # 2. KV projection
         latent_cache, _ = self.kv_a_proj_with_mqa(hidden_states)
         kv_a, k_pe = jnp.split(latent_cache, [512], axis=-1) # 512 is kv_lora_rank
         kv_a = self.kv_a_layernorm(kv_a)
         kv, _ = self.kv_b_proj(kv_a)
+        print(f"DEBUG: kv shape before reshape: {kv.shape}")
         kv = kv.reshape(-1, self.q_head_num, 192 + 256) # 192 qk_nope, 256 v_head_dim
+
         k_nope, v = jnp.split(kv, [192], axis=-1)
         
         # 3. Apply RoPE
         q_nope, q_pe = jnp.split(q, [192], axis=-1)
+        print(f"DEBUG: k_pe shape before reshape: {k_pe.shape}")
         k_pe = k_pe.reshape(-1, 1, 64)
+
         
         q_pe, k_pe = self.rotary_emb(positions, q_pe, k_pe)
         
