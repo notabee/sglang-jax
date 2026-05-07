@@ -73,6 +73,7 @@ def verify_attention():
     token_to_kv_pool = None 
     
     print("Running forward pass...")
+    import traceback
     try:
         with jax.set_mesh(mesh):
             output, kv_fused = attn(positions, hidden_states, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool)
@@ -81,6 +82,8 @@ def verify_attention():
         print(f"Any NaNs in output: {jnp.isnan(output).any()}")
     except Exception as e:
         print(f"Forward pass failed: {e}")
+        traceback.print_exc()
+
 
 
 if __name__ == "__main__":
