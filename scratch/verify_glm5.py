@@ -161,8 +161,11 @@ def test_routing_with_real_weights():
         print(f"Output shape: {output.shape}")
         print(f"Any NaNs in output: {jnp.isnan(output).any()}")
         if topk_ids is not None:
-            print(f"Selected Topk IDs for first 5 tokens:\n{topk_ids[:5]}")
-            print(f"Unique experts selected: {np.unique(np.array(topk_ids))}")
+            # Pull to CPU to avoid sharding errors during printing
+            topk_cpu = jax.device_get(topk_ids)
+            print(f"Selected Topk IDs for first 5 tokens:\n{topk_cpu[:5]}")
+            print(f"Unique experts selected: {np.unique(topk_cpu)}")
+
             
     except Exception as e:
         print(f"Failed during verification: {e}")
