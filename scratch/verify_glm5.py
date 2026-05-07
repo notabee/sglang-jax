@@ -98,14 +98,16 @@ def test_moe_with_random_weights():
         token_to_kv_pool = DummyKVCache()
         
         print("Running forward pass on MoE layer...")
-        output, residual, kv_fused, topk_ids = layer(
-            positions,
-            hidden_states,
-            forward_batch=forward_batch,
-            token_to_kv_pool=token_to_kv_pool,
-        )
+        with jax.set_mesh(mesh):
+            output, residual, kv_fused, topk_ids = layer(
+                positions,
+                hidden_states,
+                forward_batch=forward_batch,
+                token_to_kv_pool=token_to_kv_pool,
+            )
         
         print("Forward pass successful!")
+
         print(f"Output shape: {output.shape}")
         print(f"Any NaNs in output: {jnp.isnan(output).any()}")
         if topk_ids is not None:
