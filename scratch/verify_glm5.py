@@ -58,20 +58,30 @@ def verify_attention():
     positions = jnp.arange(seq_len, dtype=jnp.int32)
     positions = jnp.tile(positions, batch_size)
     
-    # Create a dummy ForwardBatch and KVCache
-    # These might need real objects depending on how RadixAttention uses them.
-    # For now, let's pass None or dummy if allowed.
-    # In sglang-jax, forward_batch and token_to_kv_pool are usually complex.
+    # Create a dummy ForwardBatch
+    class DummyAttnBackend:
+        def __call__(self, *args, **kwargs):
+            # Return dummy attention output and kv_fused
+            # Shape: [total_tokens, num_heads, head_dim] -> [20, 64, 256]
+            return jnp.zeros((20, 64, 256), dtype=jnp.bfloat16), None
+
+    class DummyForwardBatch:
+        def __init__(self):
+            self.attn_backend = DummyAttnBackend()
+            
+    forward_batch = DummyForwardBatch()
+    token_to_kv_pool = None 
     
     print("Running forward pass...")
     try:
-        # We might need to mock or create real ForwardBatch/KVCache objects.
-        # Let's try to run it and see what happens.
-        # output, kv_fused = attn(positions, hidden_states, forward_batch=None, token_to_kv_pool=None)
-        print("Forward pass requires valid forward_batch and token_to_kv_pool. Skipping run until we can mock them.")
-        # TODO: Add mocking for ForwardBatch and KVCache
+        with jax.set_mesh(mesh):
+            output, kv_fused = attn(positions, hidden_states, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool)
+        print("Forward pass successful!")
+        print(f"Output shape: {output.shape}")
+        print(f"Any NaNs in output: {jnp.isnan(output).any()}")
     except Exception as e:
         print(f"Forward pass failed: {e}")
+
 
 if __name__ == "__main__":
     verify_attention()
