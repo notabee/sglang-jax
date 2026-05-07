@@ -69,8 +69,20 @@ def test_moe_with_real_weights():
                 val = torch_tensor
                 if transpose:
                     val = val.T
+                
+                # Determine sharding based on parameter shape
+                from jax.sharding import PartitionSpec as P
+                if param.shape[1] == 6144: # hidden_size
+                    out_sharding = P("expert", None, "tensor")
+                else:
+                    out_sharding = P("expert", "tensor", None)
+                    
                 with jax.set_mesh(layer.mlp.moe_mesh):
-                    param.value = param.value.at[expert_idx].set(jnp.asarray(val, dtype=jnp.bfloat16))
+                    param.value = param.value.at[expert_idx].set(
+                        jnp.asarray(val, dtype=jnp.bfloat16),
+                        out_sharding=out_sharding
+                    )
+
 
 
             assign_expert_weight(layer.mlp.wi_0, expert_weights["gate_proj.weight"], 0, transpose=True)
