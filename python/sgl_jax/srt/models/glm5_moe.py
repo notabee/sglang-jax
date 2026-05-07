@@ -286,8 +286,9 @@ class Glm5Attention(nnx.Module):
             k_rope=k_rope,
         )
 
-        # o_v[t, h, d] = sum_r o_latent[t, h, r] * w_uv[r, h, d]
-        o_v = jnp.einsum("thr,rhd->thd", o_latent, self.w_uv.value)
+        # o_v[t, h, d] = sum_r attn_output[t, h, r] * w_uv[r, h, d]
+        o_v = jnp.einsum("thr,rhd->thd", attn_output, self.w_uv.value)
+
         attn_output = o_v.reshape(-1, self.q_head_num * self.v_head_dim)
         
         output, _ = self.o_proj(attn_output)
