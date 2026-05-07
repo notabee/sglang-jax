@@ -131,9 +131,11 @@ def test_with_real_weights():
                 def get_fused_kv_buffer(self, layer_id):
                     # Shape: [pages, page_size, packing, dim]
                     # MLA pool aligns segments to 128: 512 + align(64, 128) = 512 + 128 = 640
-                    return jnp.zeros((1, 1, 1, 640), dtype=jnp.bfloat16)
+                    # For bfloat16, packing must be 2 (32 bits // 16 bits = 2).
+                    return jnp.zeros((1, 1, 2, 640), dtype=jnp.bfloat16)
                     
             token_to_kv_pool = DummyKVCache()
+
 
             
             print("Running forward pass with real weights and FlashAttention backend...")
