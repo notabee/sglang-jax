@@ -30,8 +30,9 @@ def verify_attention():
     
     # Instantiate Attention
     try:
-        with mesh:
+        with jax.set_mesh(mesh):
             attn = Glm5Attention(
+
                 hidden_size=hidden_size,
                 num_heads=num_heads,
                 num_kv_heads=num_kv_heads,
