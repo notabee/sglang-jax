@@ -632,63 +632,9 @@ class Glm5ForCausalLM(nnx.Module):
         except Exception as e:
             logger.info(f"DEBUG: Failed to print weights: {e}")
         
-        # Invert scales because checkpoint provides weight_scale_inv
-        logger.info("Inverting weight scales...")
-        for layer in self.model.layers:
-            attn = layer.self_attn
-            if hasattr(attn, "q_a_proj") and hasattr(attn.q_a_proj, "weight_scale"):
-                if attn.q_a_proj.weight_scale is not None:
-                    attn.q_a_proj.weight_scale.value = 1.0 / attn.q_a_proj.weight_scale.value
-                if attn.q_b_proj.weight_scale is not None:
-                    attn.q_b_proj.weight_scale.value = 1.0 / attn.q_b_proj.weight_scale.value
-                if attn.kv_a_proj_with_mqa.weight_scale is not None:
-                    attn.kv_a_proj_with_mqa.weight_scale.value = 1.0 / attn.kv_a_proj_with_mqa.weight_scale.value
-                if attn.kv_b_proj.weight_scale is not None:
-                    attn.kv_b_proj.weight_scale.value = 1.0 / attn.kv_b_proj.weight_scale.value
-                if attn.o_proj.weight_scale is not None:
-                    attn.o_proj.weight_scale.value = 1.0 / attn.o_proj.weight_scale.value
-                if hasattr(attn.indexer, "wk") and attn.indexer.wk.weight_scale is not None:
-                    attn.indexer.wk.weight_scale.value = 1.0 / attn.indexer.wk.weight_scale.value
-                if hasattr(attn.indexer, "wq_b") and attn.indexer.wq_b.weight_scale is not None:
-                    attn.indexer.wq_b.weight_scale.value = 1.0 / attn.indexer.wq_b.weight_scale.value
-                if hasattr(attn.indexer, "weights_proj") and attn.indexer.weights_proj.weight_scale is not None:
-                    attn.indexer.weights_proj.weight_scale.value = 1.0 / attn.indexer.weights_proj.weight_scale.value
-            
-            mlp = layer.mlp
-            if hasattr(mlp, "gate_proj") and hasattr(mlp.gate_proj, "weight_scale"):
-                if mlp.gate_proj.weight_scale is not None:
-                    mlp.gate_proj.weight_scale.value = 1.0 / mlp.gate_proj.weight_scale.value
-                if mlp.up_proj.weight_scale is not None:
-                    mlp.up_proj.weight_scale.value = 1.0 / mlp.up_proj.weight_scale.value
-                if mlp.down_proj.weight_scale is not None:
-                    mlp.down_proj.weight_scale.value = 1.0 / mlp.down_proj.weight_scale.value
-            elif hasattr(mlp, "experts") and hasattr(mlp.experts, "wi_0_scale"):
-                if mlp.experts.wi_0_scale is not None:
-                     mlp.experts.wi_0_scale.value = 1.0 / mlp.experts.wi_0_scale.value
-                if mlp.experts.wi_1_scale is not None:
-                     mlp.experts.wi_1_scale.value = 1.0 / mlp.experts.wi_1_scale.value
-                if mlp.experts.wo_scale is not None:
-                     mlp.experts.wo_scale.value = 1.0 / mlp.experts.wo_scale.value
-            
-            if hasattr(layer, "shared_experts") and layer.shared_experts is not None:
-                shared = layer.shared_experts
-                if hasattr(shared.gate_proj, "weight_scale") and shared.gate_proj.weight_scale is not None:
-                    shared.gate_proj.weight_scale.value = 1.0 / shared.gate_proj.weight_scale.value
-                if hasattr(shared.up_proj, "weight_scale") and shared.up_proj.weight_scale is not None:
-                    shared.up_proj.weight_scale.value = 1.0 / shared.up_proj.weight_scale.value
-                if hasattr(shared.down_proj, "weight_scale") and shared.down_proj.weight_scale is not None:
-                    shared.down_proj.weight_scale.value = 1.0 / shared.down_proj.weight_scale.value
-        
-        # Invert scales for embed_tokens and lm_head
-        if hasattr(self.model.embed_tokens, "weight_scale") and self.model.embed_tokens.weight_scale is not None:
-            logger.info("Inverting embed_tokens scale...")
-            self.model.embed_tokens.weight_scale.value = 1.0 / self.model.embed_tokens.weight_scale.value
-        
-        if hasattr(self, "lm_head") and hasattr(self.lm_head, "weight_scale") and self.lm_head.weight_scale is not None:
-            logger.info("Inverting lm_head scale...")
-            self.lm_head.weight_scale.value = 1.0 / self.lm_head.weight_scale.value
+        # Skipping scale inversion for BF16
+        logger.info("Skipping scale inversion for BF16 model.")
 
-        logger.info("Weights loaded and scales inverted successfully!")
 
     def _create_glm5_weight_mappings(self, model_config: ModelConfig) -> dict:
         mappings = {

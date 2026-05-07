@@ -458,14 +458,10 @@ def _ragged_paged_attention_kernel_loop(
                 q = jnp.clip(q, min=minval, max=maxval)
             q = q.astype(k.dtype)
 
-        pl.debug_print("DEBUG: q max=%f", jnp.max(q))
-        pl.debug_print("DEBUG: k max=%f", jnp.max(k))
-        
         s = jnp.matmul(q, k.T, preferred_element_type=jnp.float32)
-        
-        pl.debug_print("DEBUG: s max before scale=%f", jnp.max(s))
 
         s_scale = sm_scale
+
         if k_scale is not None:
             s_scale *= k_scale
         if q_scale is not None:
