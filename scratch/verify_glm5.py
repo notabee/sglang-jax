@@ -14,7 +14,6 @@ from sgl_jax.srt.models.glm5_moe import Glm5Attention
 from sgl_jax.srt.utils.mesh_utils import create_device_mesh
 import safetensors.numpy as st_np
 
-
 def test_with_real_weights():
     print("Verifying with real weights...")
     weights_path = "/local/GLM-5.1/model-00001-of-00282.safetensors"
@@ -25,7 +24,6 @@ def test_with_real_weights():
         
     print("Loading weights...")
     weights = st_np.load_file(weights_path)
-
     
     # Filter weights for layer 0 attention
     prefix = "model.layers.0.self_attn."
@@ -47,26 +45,78 @@ def test_with_real_weights():
     
     mesh = create_device_mesh(ici_parallelism=[1, -1], dcn_parallelism=[1, 1])
     
-    with jax.set_mesh(mesh):
-        jax_attn = Glm5Attention(
-            hidden_size=hidden_size,
-            num_heads=num_heads,
-            num_kv_heads=num_kv_heads,
-            max_position_embeddings=max_position_embeddings,
-            mesh=mesh,
-            rope_theta=rope_theta,
-            head_dim=head_dim,
-            rms_norm_eps=rms_norm_eps,
-            layer_id=0,
-            dtype=jnp.bfloat16,
-        )
-        
-    print("\nSuccessfully instantiated JAX Glm5Attention!")
-    
-    # TODO: Once we see the keys, we will add the manual assignment here
-    # e.g., jax_attn.q_a_proj.weight.value = ...
-    
-    print("\nPlease run this script on the pod to see the exact keys and shapes in the checkpoint.")
+    try:
+        with jax.set_mesh(mesh):
+            jax_attn = Glm5Attention(
+                hidden_size=hidden_size,
+                num_heads=num_heads,
+                num_kv_heads=num_kv_heads,
+                max_position_embeddings=max_position_embeddings,
+                mesh=mesh,
+                rope_theta=rope_theta,
+                head_dim=head_dim,
+                rms_norm_eps=rms_norm_eps,
+                layer_id=0,
+                dtype=jnp.bfloat16,
+            )
+            print("Successfully instantiated JAX Glm5Attention!")
+            
+            # Load weights into JAX
+            def assign_weight(jax_param, torch_tensor, transpose=False):
+                val = torch_tensor
+                if transpose:
+                    val = val.T
+                jax_param.value = jnp.asarray(val, dtype=jnp.bfloat16)
+
+            print("Assigning weights to JAX model...")
+            assign_weight(jax_attn.q_a_proj.weight, attn_weights["q_a_proj.weight"], transpose=True)
+            assign_weight(jax_attn.q_a_layernorm.scale, attn_weights["q_a_layernorm.weight"])
+            assign_weight(jax_attn.q_b_proj.weight, attn_weights["q_b_proj.weight"], transpose=True)
+            
+            assign_weight(jax_attn.kv_a_proj_with_mqa.weight, attn_weights["kv_a_proj_with_mqa.weight"], transpose=True)
+            assign_weight(jax_attn.kv_a_layernorm.scale, attn_weights["kv_a_layernorm.weight"])
+            assign_weight(jax_attn.kv_b_proj.weight, attn_weights["kv_b_proj.weight"], transpose=True)
+            
+            assign_weight(jax_attn.o_proj.weight, attn_weights["o_proj.weight"], transpose=True)
+            
+            # Indexer weights
+            assign_weight(jax_attn.indexer.wq_b.weight, attn_weights["indexer.wq_b.weight"], transpose=True)
+            assign_weight(jax_attn.indexer.wk.weight, attn_weights["indexer.wk.weight"], transpose=True)
+            assign_weight(jax_attn.indexer.weights_proj.weight, attn_weights["indexer.weights_proj.weight"], transpose=True)
+            assign_weight(jax_attn.indexer.k_norm.weight, attn_weights["indexer.k_norm.weight"])
+            assign_weight(jax_attn.indexer.k_norm.bias, attn_weights["indexer.k_norm.bias"])
+
+            print("Weights assigned successfully!")
+            
+            # Generate random inputs for forward pass
+            batch_size = 2
+            seq_len = 10
+            hidden_states = jnp.ones((batch_size * seq_len, hidden_size), dtype=jnp.bfloat16)
+            positions = jnp.arange(seq_len, dtype=jnp.int32)
+            positions = jnp.tile(positions, batch_size)
+            
+            # Create a dummy ForwardBatch
+            class DummyAttnBackend:
+                def __call__(self, *args, **kwargs):
+                    return jnp.zeros((20, 64, 256), dtype=jnp.bfloat16), None
+
+            class DummyForwardBatch:
+                def __init__(self):
+                    self.attn_backend = DummyAttnBackend()
+                    
+            forward_batch = DummyForwardBatch()
+            token_to_kv_pool = None 
+            
+            print("Running forward pass with real weights...")
+            output, kv_fused = jax_attn(positions, hidden_states, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool)
+            print("Forward pass successful!")
+            print(f"Output shape: {output.shape}")
+            print(f"Any NaNs in output: {jnp.isnan(output).any()}")
+            
+    except Exception as e:
+        print(f"Failed during verification: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     test_with_real_weights()
