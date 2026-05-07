@@ -24,9 +24,10 @@ def verify_attention():
     head_dim = 64
     rms_norm_eps = 1e-5
     
-    # Create a mesh for testing (dummy mesh)
-    devices = jax.devices()
-    mesh = jax.sharding.Mesh(np.array(devices).reshape(1, -1), axis_names=("data", "tensor"))
+    # Create a mesh for testing
+    from sgl_jax.srt.utils.mesh_utils import create_device_mesh
+    mesh = create_device_mesh(ici_parallelism=[1, -1], dcn_parallelism=[1, 1])
+
     
     # Instantiate Attention
     try:
