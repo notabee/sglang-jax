@@ -113,7 +113,7 @@ def test_with_real_weights():
                 def __init__(self):
                     self.cu_q_lens = jnp.array([0, 10, 20], dtype=jnp.int32)
                     self.cu_kv_lens = jnp.array([0, 10, 20], dtype=jnp.int32)
-                    self.page_indices = jnp.array([0, 1], dtype=jnp.int32)
+                    self.page_indices = jnp.arange(20, dtype=jnp.int32)
                     self.seq_lens = jnp.array([10, 10], dtype=jnp.int32)
                     self.distribution = jnp.array([0, 0, 2], dtype=jnp.int32)
                     self.custom_mask = None
@@ -132,7 +132,8 @@ def test_with_real_weights():
                     # Shape: [pages, page_size, packing, dim]
                     # MLA pool aligns segments to 128: 512 + align(64, 128) = 512 + 128 = 640
                     # For bfloat16, packing must be 2 (32 bits // 16 bits = 2).
-                    return jnp.zeros((1, 1, 2, 640), dtype=jnp.bfloat16)
+                    # We need at least 20 pages for 20 tokens with page_size=1!
+                    return jnp.zeros((20, 1, 2, 640), dtype=jnp.bfloat16)
                     
             token_to_kv_pool = DummyKVCache()
 
