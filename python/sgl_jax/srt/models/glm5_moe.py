@@ -95,7 +95,9 @@ class GlmDsaIndexer(nnx.Module):
         key = self.k_norm(key)
         
         # 2. Compute Logits (simplified dense dot product)
-        logits = jnp.einsum("thd,sd->ths", query, key)
+        key_replicated = jax.lax.with_sharding_constraint(key, P(None, None))
+        logits = jnp.einsum("thd,sd->ths", query, key_replicated)
+
         
         # 3. Apply weights_proj
         weights, _ = self.weights_proj(hidden_states)
