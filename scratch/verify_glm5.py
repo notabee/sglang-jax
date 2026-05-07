@@ -7,13 +7,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'p
 sys.path.append('/usr/local/google/home/rishabhbaghel/sglang/python')
 
 import numpy as np
-import torch
 import jax
 import jax.numpy as jnp
 from flax import nnx
 from sgl_jax.srt.models.glm5_moe import Glm5Attention
 from sgl_jax.srt.utils.mesh_utils import create_device_mesh
-import safetensors.torch
+import safetensors.numpy as st_np
+
 
 def test_with_real_weights():
     print("Verifying with real weights...")
@@ -24,7 +24,8 @@ def test_with_real_weights():
         return
         
     print("Loading weights...")
-    weights = safetensors.torch.load_file(weights_path)
+    weights = st_np.load_file(weights_path)
+
     
     # Filter weights for layer 0 attention
     prefix = "model.layers.0.self_attn."
