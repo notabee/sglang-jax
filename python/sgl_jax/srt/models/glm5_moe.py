@@ -79,9 +79,29 @@ class GlmDsaIndexer(nnx.Module):
         )
 
     def __call__(self, hidden_states: jax.Array, qr: jax.Array) -> jax.Array:
-        # Dummy implementation for now to allow compilation
-        # TODO: Implement full DSA indexing logic
-        return jnp.zeros((hidden_states.shape[0], self.n_head), dtype=jnp.int32)
+        # 1. Project Query and Key
+        query, _ = self.wq_b(qr)
+        query = query.reshape(-1, self.n_head, self.head_dim)
+        
+        key, _ = self.wk(hidden_states)
+        key = self.k_norm(key)
+        
+        # 2. Compute Logits (simplified dense dot product)
+        logits = jnp.einsum("thd,sd->ths", query, key)
+        
+        # 3. Apply weights_proj
+        weights, _ = self.weights_proj(hidden_states)
+        
+        # Scale and apply weights
+        scaling = self.head_dim**-0.5
+        logits = logits * scaling * weights[:, :, None]
+        
+        # 4. Top-K Selection (Top-1 for now to match dummy shape [T, n_head])
+        _, topk_ids = jax.lax.top_k(logits, 1)
+        topk_ids = topk_ids.squeeze(-1)
+        
+        return topk_ids
+
 
 
 class Glm5Attention(nnx.Module):

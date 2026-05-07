@@ -101,6 +101,14 @@ def test_routing_with_real_weights():
             layer.moe_gate.bias.value = jnp.asarray(gate_weights["e_score_correction_bias"], dtype=jnp.bfloat16)
             
             print("Weights assigned successfully!")
+            
+            # Test the indexer directly
+            print("Testing indexer directly...")
+            dummy_hidden = jnp.ones((2, 6144), dtype=jnp.bfloat16)
+            dummy_qr = jnp.ones((2, 2048), dtype=jnp.bfloat16)
+            idx_output = layer.self_attn.indexer(dummy_hidden, dummy_qr)
+            print(f"Indexer output shape: {idx_output.shape}")
+            print(f"Indexer output: {idx_output}")
 
         # Generate random inputs
         batch_size = 2
