@@ -2,12 +2,10 @@ import logging
 from typing import Any
 
 import jax
-import numpy as np
 from flax import nnx
 from jax import numpy as jnp
-from transformers import PretrainedConfig
-from jax.sharding import NamedSharding
 from jax.sharding import PartitionSpec as P
+from transformers import PretrainedConfig
 
 from sgl_jax.srt.configs.model_config import ModelConfig, MoEBackend
 from sgl_jax.srt.eplb.expert_location import ExpertLocationMetadata
@@ -26,16 +24,15 @@ from sgl_jax.srt.layers.radix_attention import RadixAttention
 from sgl_jax.srt.mem_cache.memory_pool import KVCache
 from sgl_jax.srt.model_executor.forward_batch_info import ForwardBatch
 from sgl_jax.srt.utils.weight_utils import WeightLoader, WeightMapping
-from jax.experimental import io_callback
 
 logger = logging.getLogger(__name__)
-
 
 
 class GlmNorm(nnx.Module):
     def __init__(self, dim: int, dtype: jnp.dtype = jnp.bfloat16):
         self.weight = nnx.Param(jnp.ones((dim,), dtype=dtype))
         self.bias = nnx.Param(jnp.zeros((dim,), dtype=dtype))
+
 
 class GlmDsaIndexer(nnx.Module):
     def __init__(
@@ -50,7 +47,7 @@ class GlmDsaIndexer(nnx.Module):
     ):
         self.head_dim = index_head_dim
         self.n_head = index_n_heads
-        
+
         self.wq_b = LinearBase(
             input_size=q_lora_rank,
             output_size=index_head_dim * index_n_heads,
@@ -70,7 +67,7 @@ class GlmDsaIndexer(nnx.Module):
             scope_name="wk",
         )
         self.k_norm = GlmNorm(index_head_dim, dtype)
-        
+
         self.weights_proj = LinearBase(
             input_size=hidden_size,
             output_size=index_n_heads,
@@ -85,6 +82,7 @@ class GlmDsaIndexer(nnx.Module):
         # Dummy implementation for now to allow compilation
         # TODO: Implement full DSA indexing logic
         return jnp.zeros((hidden_states.shape[0], self.n_head), dtype=jnp.int32)
+
 
 class Glm5Attention(nnx.Module):
     def __init__(
@@ -108,7 +106,7 @@ class Glm5Attention(nnx.Module):
         self.mesh = mesh
         self.q_head_num = num_heads
         self.kv_head_num = num_kv_heads
-        
+
         self.qk_nope_head_dim = 192
         self.qk_rope_head_dim = 64
         self.qk_head_dim = 256
@@ -121,12 +119,8 @@ class Glm5Attention(nnx.Module):
         self.use_qk_norm = use_qk_norm
 
         if use_qk_norm:
-            self.q_norm = RMSNorm(
-                256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="q_norm"
-            )
-            self.k_norm = RMSNorm(
-                256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="k_norm"
-            )
+            self.q_norm = RMSNorm(256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="q_norm")
+            self.k_norm = RMSNorm(256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="k_norm")
         else:
             self.q_norm = None
             self.k_norm = None
@@ -164,7 +158,7 @@ class Glm5Attention(nnx.Module):
         self.kv_a_layernorm = RMSNorm(
             self.kv_lora_rank, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="kv_a_layernorm"
         )
-        
+
         # kv_b_proj is initialized but will be dropped in post_load_weights
         self.kv_b_proj = LinearBase(
             input_size=self.kv_lora_rank,
@@ -175,7 +169,7 @@ class Glm5Attention(nnx.Module):
             mesh=mesh,
             scope_name="kv_b_proj",
         )
-        
+
         self.o_proj = LinearBase(
             input_size=num_heads * self.v_head_dim,
             output_size=hidden_size,
@@ -203,7 +197,7 @@ class Glm5Attention(nnx.Module):
             dtype=dtype,
             mesh=mesh,
         )
-        
+
         # Absorbed MLA placeholders
         uk_axes = (None, "tensor", None)
         self.w_uk = nnx.Param(
@@ -224,10 +218,10 @@ class Glm5Attention(nnx.Module):
         # MQA attention on latent states
         self.attn = RadixAttention(
             num_heads=num_heads,
-            head_dim=self.kv_lora_rank + self.qk_rope_head_dim, # 576
+            head_dim=self.kv_lora_rank + self.qk_rope_head_dim,  # 576
             scaling=self.scaling,
             num_kv_heads=1,
-            v_head_dim=self.kv_lora_rank, # 512
+            v_head_dim=self.kv_lora_rank,  # 512
             layer_id=layer_id,
         )
 
@@ -256,7 +250,7 @@ class Glm5Attention(nnx.Module):
         q_compressed = self.q_a_layernorm(q_compressed)
         q, _ = self.q_b_proj(q_compressed)
         q = q.reshape(-1, self.q_head_num, self.qk_head_dim)
-        
+
         q_nope = q[:, :, : self.qk_nope_head_dim]
         q_rope = q[:, :, self.qk_nope_head_dim :]
 
@@ -264,9 +258,9 @@ class Glm5Attention(nnx.Module):
         latent_cache, _ = self.kv_a_proj_with_mqa(hidden_states)
         compressed, k_rope = jnp.split(latent_cache, [self.kv_lora_rank], axis=-1)
         compressed = self.kv_a_layernorm(compressed)
-        
+
         k_rope = k_rope.reshape(-1, 1, self.qk_rope_head_dim)
-        
+
         # 3. Apply RoPE
         q_rope, k_rope = self.rotary_emb(positions, q_rope, k_rope)
 
@@ -290,9 +284,9 @@ class Glm5Attention(nnx.Module):
         o_v = jnp.einsum("thr,rhd->thd", attn_output, self.w_uv.value)
 
         attn_output = o_v.reshape(-1, self.q_head_num * self.v_head_dim)
-        
+
         output, _ = self.o_proj(attn_output)
-        
+
         return output, kv_fused
 
 
@@ -346,6 +340,7 @@ class Glm5MLP(nnx.Module):
         output, _ = self.down_proj(intermediate_parallel)
         return output
 
+
 class Glm5DecoderLayer(nnx.Module):
     def __init__(
         self,
@@ -361,7 +356,7 @@ class Glm5DecoderLayer(nnx.Module):
         max_position_embeddings = getattr(config, "max_position_embeddings", 131072)
         self.head_dim = getattr(config, "head_dim", None) or 128
         use_qk_norm = getattr(config, "use_qk_norm", True)
-        
+
         partial_rotary_factor = getattr(config, "partial_rotary_factor", 0.5)
         rotary_dim = int(self.head_dim * partial_rotary_factor)
 
@@ -527,6 +522,7 @@ class Glm5DecoderLayer(nnx.Module):
 
         return hidden_states, residual, kv_fused, topk_ids
 
+
 class Glm5Model(nnx.Module):
     def __init__(
         self,
@@ -590,6 +586,7 @@ class Glm5Model(nnx.Module):
         hidden_states = self.norm(hidden_states)
         return hidden_states, layers_kv_fused, layers_topk_ids
 
+
 class Glm5ForCausalLM(nnx.Module):
     def __init__(
         self,
@@ -630,9 +627,7 @@ class Glm5ForCausalLM(nnx.Module):
             output = self.logits_processor(hidden_states, self.lm_head, logits_metadata)
         else:
             output = self.logits_processor(hidden_states, self.model.embed_tokens, logits_metadata)
-            
 
-             
         return output, layers_kv_fused, True, layers_topk_ids
 
     def load_weights(self, model_config: ModelConfig):
@@ -644,14 +639,13 @@ class Glm5ForCausalLM(nnx.Module):
         )
         weight_mappings = self._create_glm5_weight_mappings(model_config)
         loader.load_weights_from_safetensors(weight_mappings)
-        
+
         for layer in self.model.layers:
             layer.self_attn.post_load_weights()
         logger.info("Absorbed MLA weights split successfully!")
-        
+
         # Skipping scale inversion for BF16
         logger.info("Skipping scale inversion for BF16 model.")
-
 
     def _create_glm5_weight_mappings(self, model_config: ModelConfig) -> dict:
         mappings = {
@@ -680,7 +674,10 @@ class Glm5ForCausalLM(nnx.Module):
         for layer_idx in range(num_layers):
             target_idx = hf_layer_indices[layer_idx]
             layer_mappings = self._create_moe_layer_mappings(
-                layer_idx, target_idx, target_idx < first_k_dense_replace, is_static_quant=is_static_quant
+                layer_idx,
+                target_idx,
+                target_idx < first_k_dense_replace,
+                is_static_quant=is_static_quant,
             )
             mappings.update(layer_mappings)
 
@@ -865,16 +862,13 @@ class Glm5ForCausalLM(nnx.Module):
                 num_experts=num_logical_experts,
                 expert_type_names=("gate_proj", "up_proj", "down_proj"),
                 moe_backend=moe_backend,
-                physical_to_logical_map=None, # Handle physical mapping if needed later
+                physical_to_logical_map=None,  # Handle physical mapping if needed later
             )
 
             if is_static_quant:
                 new_moe_mappings = {}
-                BLOCK_SIZE = 256
                 hidden_size = self.config.hidden_size
                 inter_size = self.config.moe_intermediate_size
-                num_physical_experts = num_logical_experts # Assuming no redundant experts for now
-                use_fused = moe_backend == "fused"
 
                 for key, mapping in moe_mappings.items():
                     target_param = mapping.target_path[0]
@@ -893,7 +887,6 @@ class Glm5ForCausalLM(nnx.Module):
                     scale_src_paths = [p.replace(".weight", ".weight_scale_inv") for p in src_paths]
 
                     is_w2 = target_param.endswith("wo") or target_param.endswith("w2")
-                    out_dim = hidden_size if is_w2 else inter_size
 
                     # For GLM-5 FP8, scales are stored as [num_experts, in_blocks, out_blocks]
                     # We need to transpose them to [num_experts, out_blocks, in_blocks] for moe.py
@@ -929,25 +922,33 @@ class Glm5ForCausalLM(nnx.Module):
                     transpose=True,
                 )
                 if is_static_quant:
-                    mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale_inv"] = WeightMapping(
-                        target_path=f"{target_prefix}.shared_experts.gate_proj.weight_scale",
-                        sharding=(None,),
-                        transpose=False,
+                    mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale_inv"] = (
+                        WeightMapping(
+                            target_path=f"{target_prefix}.shared_experts.gate_proj.weight_scale",
+                            sharding=(None,),
+                            transpose=False,
+                        )
                     )
-                    mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale_inv"] = WeightMapping(
-                        target_path=f"{target_prefix}.shared_experts.up_proj.weight_scale",
-                        sharding=(None,),
-                        transpose=False,
+                    mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale_inv"] = (
+                        WeightMapping(
+                            target_path=f"{target_prefix}.shared_experts.up_proj.weight_scale",
+                            sharding=(None,),
+                            transpose=False,
+                        )
                     )
-                    mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale_inv"] = WeightMapping(
-                        target_path=f"{target_prefix}.shared_experts.down_proj.weight_scale",
-                        sharding=(None,),
-                        transpose=False,
+                    mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale_inv"] = (
+                        WeightMapping(
+                            target_path=f"{target_prefix}.shared_experts.down_proj.weight_scale",
+                            sharding=(None,),
+                            transpose=False,
+                        )
                     )
 
         return mappings
 
+
 class GlmMoeDsaForCausalLM(Glm5ForCausalLM):
     pass
+
 
 EntryClass = [Glm5ForCausalLM, GlmMoeDsaForCausalLM]

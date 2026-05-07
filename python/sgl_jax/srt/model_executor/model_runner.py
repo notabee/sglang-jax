@@ -187,7 +187,7 @@ class ModelRunner(ModelRunnerKVCacheMixin, BaseModelRunner):
         model_def, model_state = nnx.split(self.model)
         # note export for external modification
         self.model_state_leaves, model_state_def = jax.tree_util.tree_flatten(model_state)
-        
+
         # Removed workaround that replaced ShapeDtypeStruct with zeros
 
         sampler_def, sampler_state = nnx.split(self.sampler)

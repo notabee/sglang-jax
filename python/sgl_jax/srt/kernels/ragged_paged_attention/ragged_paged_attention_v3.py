@@ -477,7 +477,6 @@ def _ragged_paged_attention_kernel_loop(
         if soft_cap is not None:
             s = soft_cap * jnp.tanh(s / soft_cap)
 
-
         # Use int16 for span computations when safe: non-f32 dtype on TPU v6+
         # with causal mask. Custom mask shapes can trigger a Mosaic compiler bug.
         int_ty = jnp.int32
@@ -1893,7 +1892,6 @@ def ragged_paged_attention(
                 scratch_shapes=scratch_shapes,
             ),
             compiler_params=pltpu.CompilerParams(
-
                 dimension_semantics=("arbitrary",),
                 vmem_limit_bytes=vmem_limit_bytes,
                 disable_bounds_checks=True,

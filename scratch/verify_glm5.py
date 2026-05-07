@@ -1,19 +1,21 @@
-import sys
 import os
+import sys
 
 # Add python dir to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'python')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
 # Add sglang dir to path
-sys.path.append('/usr/local/google/home/rishabhbaghel/sglang/python')
+sys.path.append("/usr/local/google/home/rishabhbaghel/sglang/python")
 
-import numpy as np
 import jax
 import jax.numpy as jnp
+import numpy as np
+import safetensors.numpy as st_np
 from flax import nnx
+
+from sgl_jax.srt.layers.attention.mla_backend import MLAAttentionBackend
 from sgl_jax.srt.models.glm5_moe import Glm5DecoderLayer
 from sgl_jax.srt.utils.mesh_utils import create_device_mesh
-from sgl_jax.srt.layers.attention.mla_backend import MLAAttentionBackend
-import safetensors.numpy as st_np
+
 
 class MockConfig:
     def __init__(self):
@@ -34,12 +36,13 @@ class MockConfig:
         self.quantization_config = None
         self.ep_size = 1
 
+
 def test_moe_with_random_weights():
     print("Verifying MoE block with random weights...")
-    
+
     config = MockConfig()
     mesh = create_device_mesh(ici_parallelism=[1, -1], dcn_parallelism=[1, 1])
-    
+
     try:
         with jax.set_mesh(mesh):
             # Instantiate layer 3 which should be an MoE layer!
@@ -50,7 +53,7 @@ def test_moe_with_random_weights():
                 dtype=jnp.bfloat16,
             )
             print("Successfully instantiated Glm5DecoderLayer (MoE)!")
-            
+
         # Generate random inputs
         batch_size = 2
         seq_len = 10
@@ -58,7 +61,7 @@ def test_moe_with_random_weights():
         hidden_states = jnp.ones((batch_size * seq_len, hidden_size), dtype=jnp.bfloat16)
         positions = jnp.arange(seq_len, dtype=jnp.int32)
         positions = jnp.tile(positions, batch_size)
-        
+
         # Create real MLAAttentionBackend for the attention part of the layer
         attn_backend = MLAAttentionBackend(
             num_attn_heads=64,
@@ -69,7 +72,7 @@ def test_moe_with_random_weights():
             page_size=1,
             mesh=mesh,
         )
-        
+
         class DummyMetadata:
             def __init__(self):
                 self.cu_q_lens = jnp.array([0, 10, 20], dtype=jnp.int32)
@@ -78,25 +81,25 @@ def test_moe_with_random_weights():
                 self.seq_lens = jnp.array([10, 10], dtype=jnp.int32)
                 self.distribution = jnp.array([0, 0, 2], dtype=jnp.int32)
                 self.custom_mask = None
-                
+
         attn_backend.forward_metadata = DummyMetadata()
 
         class DummyForwardBatch:
             def __init__(self):
                 self.attn_backend = attn_backend
                 self.expert_location_metadata = None
-                
+
             def get_token_valid_mask(self, num_tokens):
                 return jnp.ones((num_tokens,), dtype=jnp.bool_)
-                
+
         forward_batch = DummyForwardBatch()
-        
+
         class DummyKVCache:
             def get_fused_kv_buffer(self, layer_id):
                 return jnp.zeros((20, 1, 2, 640), dtype=jnp.bfloat16)
-                
+
         token_to_kv_pool = DummyKVCache()
-        
+
         print("Running forward pass on MoE layer...")
         with jax.set_mesh(mesh):
             output, residual, kv_fused, topk_ids = layer(
@@ -105,18 +108,20 @@ def test_moe_with_random_weights():
                 forward_batch=forward_batch,
                 token_to_kv_pool=token_to_kv_pool,
             )
-        
+
         print("Forward pass successful!")
 
         print(f"Output shape: {output.shape}")
         print(f"Any NaNs in output: {jnp.isnan(output).any()}")
         if topk_ids is not None:
             print(f"Topk IDs shape: {topk_ids.shape}")
-            
+
     except Exception as e:
         print(f"Failed during verification: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     test_moe_with_random_weights()
