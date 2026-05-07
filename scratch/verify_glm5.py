@@ -69,7 +69,9 @@ def test_moe_with_real_weights():
                 val = torch_tensor
                 if transpose:
                     val = val.T
-                param.value = param.value.at[expert_idx].set(jnp.asarray(val, dtype=jnp.bfloat16))
+                with jax.set_mesh(layer.mlp.moe_mesh):
+                    param.value = param.value.at[expert_idx].set(jnp.asarray(val, dtype=jnp.bfloat16))
+
 
             assign_expert_weight(layer.mlp.wi_0, expert_weights["gate_proj.weight"], 0, transpose=True)
             assign_expert_weight(layer.mlp.wi_1, expert_weights["up_proj.weight"], 0, transpose=True)
