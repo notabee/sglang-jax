@@ -30,19 +30,21 @@ def verify_attention():
     
     # Instantiate Attention
     try:
-        attn = Glm5Attention(
-            hidden_size=hidden_size,
-            num_heads=num_heads,
-            num_kv_heads=num_kv_heads,
-            max_position_embeddings=max_position_embeddings,
-            mesh=mesh,
-            rope_theta=rope_theta,
-            head_dim=head_dim,
-            rms_norm_eps=rms_norm_eps,
-            layer_id=0,
-            dtype=jnp.bfloat16,
-        )
+        with mesh:
+            attn = Glm5Attention(
+                hidden_size=hidden_size,
+                num_heads=num_heads,
+                num_kv_heads=num_kv_heads,
+                max_position_embeddings=max_position_embeddings,
+                mesh=mesh,
+                rope_theta=rope_theta,
+                head_dim=head_dim,
+                rms_norm_eps=rms_norm_eps,
+                layer_id=0,
+                dtype=jnp.bfloat16,
+            )
         print("Successfully instantiated Glm5Attention!")
+
     except Exception as e:
         print(f"Failed to instantiate Glm5Attention: {e}")
         return
