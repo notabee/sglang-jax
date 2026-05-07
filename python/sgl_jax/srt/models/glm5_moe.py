@@ -106,14 +106,16 @@ class Glm5Attention(nnx.Module):
     ):
         self.layer_id = layer_id
         self.mesh = mesh
-        assert num_heads % num_kv_heads == 0
-
-        self.head_dim = head_dim or hidden_size // num_heads
         self.q_head_num = num_heads
         self.kv_head_num = num_kv_heads
+        
+        self.qk_nope_head_dim = 192
+        self.qk_rope_head_dim = 64
+        self.qk_head_dim = 256
+        self.v_head_dim = 256
+        self.kv_lora_rank = 512
+        self.q_lora_rank = 2048
 
-        self.q_size = num_heads * self.head_dim
-        self.kv_size = num_kv_heads * self.head_dim
         self.scaling = 256**-0.5
 
         self.use_qk_norm = use_qk_norm
@@ -125,14 +127,13 @@ class Glm5Attention(nnx.Module):
             self.k_norm = RMSNorm(
                 256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="k_norm"
             )
-
         else:
             self.q_norm = None
             self.k_norm = None
 
         self.q_a_proj = LinearBase(
             input_size=hidden_size,
-            output_size=2048, # q_lora_rank
+            output_size=self.q_lora_rank,
             use_bias=False,
             kernel_axes=(None, None),
             params_dtype=dtype,
@@ -140,11 +141,11 @@ class Glm5Attention(nnx.Module):
             scope_name="q_a_proj",
         )
         self.q_a_layernorm = RMSNorm(
-            2048, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="q_a_layernorm"
+            self.q_lora_rank, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="q_a_layernorm"
         )
         self.q_b_proj = LinearBase(
-            input_size=2048,
-            output_size=num_heads * 256, # num_heads * qk_head_dim
+            input_size=self.q_lora_rank,
+            output_size=num_heads * self.qk_head_dim,
             use_bias=False,
             kernel_axes=(None, "tensor"),
             params_dtype=dtype,
@@ -153,7 +154,7 @@ class Glm5Attention(nnx.Module):
         )
         self.kv_a_proj_with_mqa = LinearBase(
             input_size=hidden_size,
-            output_size=512 + 64, # kv_lora_rank + qk_rope_head_dim
+            output_size=self.kv_lora_rank + self.qk_rope_head_dim,
             use_bias=False,
             kernel_axes=(None, None),
             params_dtype=dtype,
@@ -161,19 +162,22 @@ class Glm5Attention(nnx.Module):
             scope_name="kv_a_proj_with_mqa",
         )
         self.kv_a_layernorm = RMSNorm(
-            512, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="kv_a_layernorm"
+            self.kv_lora_rank, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="kv_a_layernorm"
         )
+        
+        # kv_b_proj is initialized but will be dropped in post_load_weights
         self.kv_b_proj = LinearBase(
-            input_size=512,
-            output_size=num_heads * (192 + 256), # num_heads * (qk_nope_head_dim + v_head_dim)
+            input_size=self.kv_lora_rank,
+            output_size=num_heads * (self.qk_nope_head_dim + self.v_head_dim),
             use_bias=False,
             kernel_axes=(None, "tensor"),
             params_dtype=dtype,
             mesh=mesh,
             scope_name="kv_b_proj",
         )
+        
         self.o_proj = LinearBase(
-            input_size=num_heads * 256, # num_heads * v_head_dim
+            input_size=num_heads * self.v_head_dim,
             output_size=hidden_size,
             use_bias=False,
             kernel_axes=("tensor", None),
@@ -183,7 +187,7 @@ class Glm5Attention(nnx.Module):
         )
         self.indexer = GlmDsaIndexer(
             hidden_size=hidden_size,
-            q_lora_rank=2048,
+            q_lora_rank=self.q_lora_rank,
             index_head_dim=128,
             index_n_heads=32,
             mesh=mesh,
@@ -191,21 +195,54 @@ class Glm5Attention(nnx.Module):
             scope_name="indexer",
         )
         self.rotary_emb = RotaryEmbedding(
-            head_size=64,  # GLM-5 qk_rope_head_dim is 64
-            rotary_dim=64,
+            head_size=self.qk_rope_head_dim,
+            rotary_dim=self.qk_rope_head_dim,
             max_position_embeddings=max_position_embeddings,
             base=rope_theta,
             is_neox_style=False,
             dtype=dtype,
             mesh=mesh,
         )
+        
+        # Absorbed MLA placeholders
+        uk_axes = (None, "tensor", None)
+        self.w_uk = nnx.Param(
+            jnp.zeros(
+                (self.kv_lora_rank, num_heads, self.qk_nope_head_dim),
+                dtype=dtype,
+                out_sharding=P(*uk_axes),
+            )
+        )
+        self.w_uv = nnx.Param(
+            jnp.zeros(
+                (self.kv_lora_rank, num_heads, self.v_head_dim),
+                dtype=dtype,
+                out_sharding=P(*uk_axes),
+            )
+        )
+
+        # MQA attention on latent states
         self.attn = RadixAttention(
             num_heads=num_heads,
-            head_dim=256,
+            head_dim=self.kv_lora_rank + self.qk_rope_head_dim, # 576
             scaling=self.scaling,
-            num_kv_heads=num_kv_heads,
+            num_kv_heads=1,
+            v_head_dim=self.kv_lora_rank, # 512
             layer_id=layer_id,
         )
+
+    def post_load_weights(self):
+        """Split kv_b_proj.weight into absorbed-MLA folded projections."""
+        if self.kv_b_proj is None:
+            return
+        w_kv = self.kv_b_proj.weight.value.reshape(
+            self.kv_lora_rank,
+            self.q_head_num,
+            self.qk_nope_head_dim + self.v_head_dim,
+        )
+        self.w_uk.value = w_kv[:, :, : self.qk_nope_head_dim]
+        self.w_uv.value = w_kv[:, :, self.qk_nope_head_dim :]
+        self.kv_b_proj = None
 
     def __call__(
         self,
@@ -215,52 +252,48 @@ class Glm5Attention(nnx.Module):
         token_to_kv_pool: KVCache,
     ) -> jax.Array:
         # 1. Q projection
-        q, _ = self.q_a_proj(hidden_states)
-        q = self.q_a_layernorm(q)
-        q, _ = self.q_b_proj(q)
-        print(f"DEBUG: q shape before reshape: {q.shape}")
-        q = q.reshape(-1, self.q_head_num, 256) # 256 is qk_head_dim
-
+        q_compressed, _ = self.q_a_proj(hidden_states)
+        q_compressed = self.q_a_layernorm(q_compressed)
+        q, _ = self.q_b_proj(q_compressed)
+        q = q.reshape(-1, self.q_head_num, self.qk_head_dim)
         
-        # 2. KV projection
-        latent_cache, _ = self.kv_a_proj_with_mqa(hidden_states)
-        kv_a, k_pe = jnp.split(latent_cache, [512], axis=-1) # 512 is kv_lora_rank
-        kv_a = self.kv_a_layernorm(kv_a)
-        kv, _ = self.kv_b_proj(kv_a)
-        print(f"DEBUG: kv shape before reshape: {kv.shape}")
-        kv = kv.reshape(-1, self.q_head_num, 192 + 256) # 192 qk_nope, 256 v_head_dim
+        q_nope = q[:, :, : self.qk_nope_head_dim]
+        q_rope = q[:, :, self.qk_nope_head_dim :]
 
-        k_nope, v = jnp.split(kv, [192], axis=-1)
+        # 2. KV projection (latent)
+        latent_cache, _ = self.kv_a_proj_with_mqa(hidden_states)
+        compressed, k_rope = jnp.split(latent_cache, [self.kv_lora_rank], axis=-1)
+        compressed = self.kv_a_layernorm(compressed)
+        
+        k_rope = k_rope.reshape(-1, 1, self.qk_rope_head_dim)
         
         # 3. Apply RoPE
-        q_nope, q_pe = jnp.split(q, [192], axis=-1)
-        print(f"DEBUG: k_pe shape before reshape: {k_pe.shape}")
-        k_pe = k_pe.reshape(-1, 1, 64)
+        q_rope, k_rope = self.rotary_emb(positions, q_rope, k_rope)
 
-        
-        q_pe, k_pe = self.rotary_emb(positions, q_pe, k_pe)
-        
-        # Combine Q and K
-        q = jnp.concatenate([q_nope, q_pe], axis=-1)
-        k_pe_repeated = k_pe.repeat(self.q_head_num, axis=1)
-        k_pe_repeated = jax.sharding.reshard(
-            k_pe_repeated, NamedSharding(self.mesh, P("data", "tensor", None))
-        )
-        k = jnp.concatenate([k_nope, k_pe_repeated], axis=-1)
-        if self.use_qk_norm:
-            q = self.q_norm(q)
-            k = self.k_norm(k)
+        # ql_nope[t, h, r] = sum_d q_nope[t, h, d] * w_uk[r, h, d]
+        ql_nope = jnp.einsum("thd,rhd->thr", q_nope, self.w_uk.value)
 
-        # 4. Attention
+        # Latent K/V are a single shared head — pack into [T, 1, *] for MQA.
+        c_kv_3d = compressed[:, None, :]
+
         attn_output, kv_fused = self.attn(
-            q, k, v, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool
+            ql_nope,
+            c_kv_3d,
+            c_kv_3d,
+            forward_batch=forward_batch,
+            token_to_kv_pool=token_to_kv_pool,
+            q_rope=q_rope,
+            k_rope=k_rope,
         )
+
+        # o_v[t, h, d] = sum_r o_latent[t, h, r] * w_uv[r, h, d]
+        o_v = jnp.einsum("thr,rhd->thd", o_latent, self.w_uv.value)
+        attn_output = o_v.reshape(-1, self.q_head_num * self.v_head_dim)
         
-        # 5. Output projection
-        attn_output = attn_output.reshape(-1, self.q_head_num * 256)
         output, _ = self.o_proj(attn_output)
         
         return output, kv_fused
+
 
 class Glm5MLP(nnx.Module):
     def __init__(
@@ -611,7 +644,9 @@ class Glm5ForCausalLM(nnx.Module):
         weight_mappings = self._create_glm5_weight_mappings(model_config)
         loader.load_weights_from_safetensors(weight_mappings)
         
-
+        for layer in self.model.layers:
+            layer.self_attn.post_load_weights()
+        logger.info("Absorbed MLA weights split successfully!")
         
         # Skipping scale inversion for BF16
         logger.info("Skipping scale inversion for BF16 model.")

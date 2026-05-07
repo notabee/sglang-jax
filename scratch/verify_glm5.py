@@ -85,6 +85,10 @@ def test_with_real_weights():
 
             print("Weights assigned successfully!")
             
+            print("Calling post_load_weights to split MLA weights...")
+            jax_attn.post_load_weights()
+            print("MLA weights split successfully!")
+            
             # Generate random inputs for forward pass
             batch_size = 2
             seq_len = 10
@@ -111,7 +115,6 @@ def test_with_real_weights():
                     self.cu_kv_lens = jnp.array([0, 10, 20], dtype=jnp.int32)
                     self.page_indices = jnp.array([0, 1], dtype=jnp.int32)
                     self.seq_lens = jnp.array([10, 10], dtype=jnp.int32)
-                    # MLA backend expects [0, 0, num_seqs] for extend!
                     self.distribution = jnp.array([0, 0, 2], dtype=jnp.int32)
                     self.custom_mask = None
                     
@@ -131,7 +134,7 @@ def test_with_real_weights():
                     
             token_to_kv_pool = DummyKVCache()
             
-            print("Running forward pass with real weights and MLA attention backend...")
+            print("Running forward pass with real weights and FlashAttention backend...")
             output, kv_fused = jax_attn(positions, hidden_states, forward_batch=forward_batch, token_to_kv_pool=token_to_kv_pool)
             print("Forward pass successful!")
             print(f"Output shape: {output.shape}")
