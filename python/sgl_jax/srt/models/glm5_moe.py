@@ -867,8 +867,6 @@ class Glm5ForCausalLM(nnx.Module):
 
             if is_static_quant:
                 new_moe_mappings = {}
-                hidden_size = self.config.hidden_size
-                inter_size = self.config.moe_intermediate_size
 
                 for key, mapping in moe_mappings.items():
                     target_param = mapping.target_path[0]
@@ -885,8 +883,6 @@ class Glm5ForCausalLM(nnx.Module):
                     scale_key = key + "_scale"
                     target_scale_param = target_param + "_scale"
                     scale_src_paths = [p.replace(".weight", ".weight_scale_inv") for p in src_paths]
-
-                    is_w2 = target_param.endswith("wo") or target_param.endswith("w2")
 
                     # For GLM-5 FP8, scales are stored as [num_experts, in_blocks, out_blocks]
                     # We need to transpose them to [num_experts, out_blocks, in_blocks] for moe.py
