@@ -120,11 +120,12 @@ class Glm5Attention(nnx.Module):
 
         if use_qk_norm:
             self.q_norm = RMSNorm(
-                self.head_dim, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="q_norm"
+                256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="q_norm"
             )
             self.k_norm = RMSNorm(
-                self.head_dim, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="k_norm"
+                256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="k_norm"
             )
+
         else:
             self.q_norm = None
             self.k_norm = None
