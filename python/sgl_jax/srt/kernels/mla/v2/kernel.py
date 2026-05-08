@@ -686,6 +686,10 @@ def _mla_ragged_paged_attention_kernel(
                 shift_bits = bits_per_element * (shift_amount % kv_packing)
                 shift_bits = shift_bits.astype(jnp.uint32)
 
+                debug_print("[RPA Pack] offset={}", offset)
+                debug_print("[RPA Pack] update_sz={}", update_sz)
+                debug_print("[RPA Pack] shift_bits={}", shift_bits)
+
                 # Calculate the starting index in the KV buffer corresponding to the new KV
                 # to fetch the data from. This index accounts for the potential offset
                 # caused by the shift_amount.
