@@ -577,11 +577,12 @@ class ModelRunner(ModelRunnerKVCacheMixin, BaseModelRunner):
         # fold_in(base_key, step) inside JIT produces a unique RNG per step.
         self._sampler_step += 1
         # Penalty application has been moved to the Sampler for better JIT performance
-        return self.jitted_sampler(
+        next_tokens = self.jitted_sampler(
             self._sampler_step,
             logits_output,
             sampling_metadata,
         )
+        return next_tokens
 
     def compute_logprobs(self, logits, token_ids: jax.Array) -> jax.Array:
         return self.jitted_compute_logprobs(logits, token_ids)
