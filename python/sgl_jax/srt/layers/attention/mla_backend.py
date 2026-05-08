@@ -147,10 +147,34 @@ class MLAAttentionBackend(AttentionBackend):
         total_loc_len = len(batch.cache_loc)
         per_dp_loc_len = total_loc_len // batch.dp_size
 
+        seq_lens_2d = batch.seq_lens.reshape(batch.dp_size, batch.per_dp_bs_size)
         cache_loc_2d = batch.cache_loc.reshape(batch.dp_size, per_dp_loc_len)
-        strided_2d = cache_loc_2d[:, :: self.page_size]
-        safe_strided = np.maximum(strided_2d, 0)
-        page_indices = (safe_strided // self.page_size).ravel()
+        
+        pages_per_rank = []
+        for i in range(batch.dp_size):
+            rank_seq_lens = seq_lens_2d[i]
+            num_pages = sum((l + self.page_size - 1) // self.page_size for l in rank_seq_lens if l > 0)
+            pages_per_rank.append(num_pages)
+        max_pages = max(pages_per_rank) if pages_per_rank else 0
+        
+        page_indices_2d = np.zeros((batch.dp_size, max_pages), dtype=np.int32)
+        
+        for i in range(batch.dp_size):
+            rank_cache_loc = cache_loc_2d[i]
+            rank_seq_lens = seq_lens_2d[i]
+            offset = 0
+            page_offset = 0
+            for seq_len in rank_seq_lens:
+                if seq_len == 0:
+                    continue
+                req_cache_loc = rank_cache_loc[offset : offset + seq_len]
+                indices = np.arange(0, len(req_cache_loc), self.page_size)
+                req_page_indices = req_cache_loc[indices] // self.page_size
+                page_indices_2d[i, page_offset : page_offset + len(req_page_indices)] = req_page_indices
+                page_offset += len(req_page_indices)
+                offset += seq_len
+        
+        page_indices = page_indices_2d.ravel()
 
         if batch.forward_mode == ForwardMode.EXTEND:
             ext_2d = batch.extend_seq_lens.reshape(batch.dp_size, batch.per_dp_bs_size)
