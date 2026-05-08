@@ -123,7 +123,8 @@ class GlmDsaIndexer(nnx.Module):
         
         # 2. Compute Logits (simplified dense dot product)
         key_replicated = jax.sharding.reshard(key, jax.sharding.NamedSharding(self.mesh, P(None, None)))
-        logits = jnp.einsum("thd,sd->ths", query, key_replicated)
+        logits = jnp.einsum("ijk,lk->ijl", query, key_replicated)
+
         
         # 3. Apply weights_proj
         weights, _ = self.weights_proj(hidden_states)
@@ -579,6 +580,9 @@ class Glm5DecoderLayer(nnx.Module):
         else:
             hidden_states = self.mlp(hidden_states)
             topk_ids = None
+
+        if self.layer_id in [0, 40, 77]:
+            jax.debug.print("Layer {i} Output Max: {x}", i=self.layer_id, x=jnp.max(jnp.abs(hidden_states)))
 
         return hidden_states, residual, kv_fused, topk_ids
 
