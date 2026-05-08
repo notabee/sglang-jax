@@ -153,7 +153,6 @@ class Glm5Attention(nnx.Module):
         rope_scaling: dict[str, Any] | None = None,
         head_dim: int | None = None,
         rms_norm_eps: float = None,
-        use_qk_norm: bool = True,
         rotary_dim: int = 0,
         layer_id: int = 0,
         attention_bias: bool = False,
@@ -172,15 +171,6 @@ class Glm5Attention(nnx.Module):
         self.q_lora_rank = 2048
 
         self.scaling = 256**-0.5
-
-        self.use_qk_norm = use_qk_norm
-
-        if use_qk_norm:
-            self.q_norm = RMSNorm(256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="q_norm")
-            self.k_norm = RMSNorm(256, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="k_norm")
-        else:
-            self.q_norm = None
-            self.k_norm = None
 
         self.q_a_proj = LinearBase(
             input_size=hidden_size,
@@ -422,7 +412,6 @@ class Glm5DecoderLayer(nnx.Module):
         rope_scaling = getattr(config, "rope_scaling", None)
         max_position_embeddings = getattr(config, "max_position_embeddings", 131072)
         self.head_dim = getattr(config, "head_dim", None) or 128
-        use_qk_norm = getattr(config, "use_qk_norm", True)
 
         partial_rotary_factor = getattr(config, "partial_rotary_factor", 0.5)
         rotary_dim = int(self.head_dim * partial_rotary_factor)
@@ -436,7 +425,6 @@ class Glm5DecoderLayer(nnx.Module):
             rope_scaling=rope_scaling,
             head_dim=self.head_dim,
             rms_norm_eps=config.rms_norm_eps,
-            use_qk_norm=use_qk_norm,
             rotary_dim=rotary_dim,
             layer_id=layer_id,
             attention_bias=getattr(config, "attention_bias", False),
