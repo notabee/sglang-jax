@@ -585,8 +585,12 @@ class Glm5DecoderLayer(nnx.Module):
 
         if self.layer_id in [0, 40, 77]:
             def _log_max(i, x):
-                print(f"Layer {i} Output Max: {x}", flush=True)
+                with open("/home/tmp/debug_activations.log", "a") as f:
+
+
+                    f.write(f"Layer {i} Output Max: {x}\n")
             jax.debug.callback(_log_max, self.layer_id, jnp.max(jnp.abs(hidden_states)))
+
 
 
 

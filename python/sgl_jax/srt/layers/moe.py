@@ -403,8 +403,12 @@ class EPMoE(nnx.Module):
     def __call__(self, hidden_states, topk_weights, topk_ids) -> jax.Array:
         if self.layer_id in [3, 40, 77]:
             def _log_moe_max(i, x):
-                print(f"MoE Layer {i} Input Max: {x}", flush=True)
+                with open("/home/tmp/debug_activations.log", "a") as f:
+
+
+                    f.write(f"MoE Layer {i} Input Max: {x}\n")
             jax.debug.callback(_log_moe_max, self.layer_id, jnp.max(jnp.abs(hidden_states)))
+
 
 
 
