@@ -683,7 +683,9 @@ def _mla_ragged_paged_attention_kernel(
                 # Compute the shift amount for each word in bits
                 shift_amount = kv_packing_offset - new_kv_packing_offset
                 bits_per_element = get_dtype_bitwidth(bkvc_vmem_ref.dtype)
-                shift_bits = bits_per_element * (shift_amount % kv_packing)
+                # Ensure positive modulo for shift amount
+                shift_amount_pos = ((shift_amount % kv_packing) + kv_packing) % kv_packing
+                shift_bits = bits_per_element * shift_amount_pos
                 shift_bits = shift_bits.astype(jnp.uint32)
 
                 debug_print("[RPA Pack] offset={}", offset)
