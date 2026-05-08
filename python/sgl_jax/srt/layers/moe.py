@@ -402,11 +402,10 @@ class EPMoE(nnx.Module):
     @named_scope
     def __call__(self, hidden_states, topk_weights, topk_ids) -> jax.Array:
         if self.layer_id in [3, 40, 77]:
-            import logging
-            moe_logger = logging.getLogger(__name__)
             def _log_moe_max(i, x):
-                moe_logger.info(f"MoE Layer {i} Input Max: {x}")
+                print(f"MoE Layer {i} Input Max: {x}", flush=True)
             jax.debug.callback(_log_moe_max, self.layer_id, jnp.max(jnp.abs(hidden_states)))
+
 
 
         # Activation quantization is now handled per-GEMM inside _gmm_compute
