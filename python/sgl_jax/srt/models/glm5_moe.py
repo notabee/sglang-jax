@@ -316,10 +316,6 @@ class Glm5Attention(nnx.Module):
 
         # 3. Apply RoPE
         q_rope, k_rope = self.rotary_emb(positions, q_rope, k_rope)
-        
-        # Pad rope parts to 128 to match 640-dim cache alignment and avoid shape mismatch
-        q_rope = jnp.pad(q_rope, ((0, 0), (0, 0), (0, 64)))
-        k_rope = jnp.pad(k_rope, ((0, 0), (0, 0), (0, 64)))
 
         # ql_nope[t, h, r] = sum_d q_nope[t, h, d] * w_uk[r, h, d]
         ql_nope = jnp.einsum("thd,rhd->thr", q_nope, self.w_uk.value)

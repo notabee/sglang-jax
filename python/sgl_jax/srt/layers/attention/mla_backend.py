@@ -172,7 +172,8 @@ class MLAAttentionBackend(AttentionBackend):
                 req_page_indices = req_cache_loc[indices] // self.page_size
                 page_indices_2d[i, page_offset : page_offset + len(req_page_indices)] = req_page_indices
                 page_offset += len(req_page_indices)
-                offset += seq_len
+                aligned_len = ((seq_len + self.page_size - 1) // self.page_size) * self.page_size
+                offset += aligned_len
         
         page_indices = page_indices_2d.ravel()
 
