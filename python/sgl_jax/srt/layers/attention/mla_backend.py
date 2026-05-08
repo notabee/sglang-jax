@@ -149,7 +149,8 @@ class MLAAttentionBackend(AttentionBackend):
 
         cache_loc_2d = batch.cache_loc.reshape(batch.dp_size, per_dp_loc_len)
         strided_2d = cache_loc_2d[:, :: self.page_size]
-        page_indices = (strided_2d // self.page_size).ravel()
+        safe_strided = np.maximum(strided_2d, 0)
+        page_indices = (safe_strided // self.page_size).ravel()
 
         if batch.forward_mode == ForwardMode.EXTEND:
             ext_2d = batch.extend_seq_lens.reshape(batch.dp_size, batch.per_dp_bs_size)
