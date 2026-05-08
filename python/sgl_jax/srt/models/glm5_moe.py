@@ -584,7 +584,10 @@ class Glm5DecoderLayer(nnx.Module):
             topk_ids = None
 
         if self.layer_id in [0, 40, 77]:
-            jax.debug.print("Layer {i} Output Max: {x}", i=self.layer_id, x=jnp.max(jnp.abs(hidden_states)))
+            def _log_max(i, x):
+                logger.info(f"Layer {i} Output Max: {x}")
+            jax.debug.callback(_log_max, self.layer_id, jnp.max(jnp.abs(hidden_states)))
+
 
         return hidden_states, residual, kv_fused, topk_ids
 
