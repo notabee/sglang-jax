@@ -1033,7 +1033,7 @@ class MLATokenToKVPool(KVCache):
         from sgl_jax.srt.kernels.mla.v2.kernel import align_to
 
         self.nope_dim = align_to(kv_lora_rank, 128)
-        self.rope_dim = align_to(qk_rope_head_dim, 128)
+        self.rope_dim = qk_rope_head_dim
         self.kv_dim = self.nope_dim + self.rope_dim
 
         self._create_buffers()

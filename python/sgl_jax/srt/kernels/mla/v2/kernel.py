@@ -82,7 +82,7 @@ def get_kv_cache_shape(
         total_num_pages,
         align_to(page_size, kv_packing) // kv_packing,
         kv_packing,
-        align_to(kv_dim, 128),
+        kv_dim,
     )
 
 
@@ -163,7 +163,7 @@ def static_validate_inputs(
     actual_lkv_dim = ql_nope.shape[2]
     actual_r_dim = q_pe.shape[2]
     lkv_dim = align_to(actual_lkv_dim, 128)
-    r_dim = align_to(actual_r_dim, 128)
+    r_dim = actual_r_dim
 
     (
         _,
@@ -313,7 +313,7 @@ def _mla_ragged_paged_attention_kernel(
     assert get_dtype_packing(q_dtype) == q_packing
     assert get_dtype_packing(kv_dtype) == kv_packing
     assert lkv_dim % 128 == 0
-    assert r_dim % 128 == 0
+    assert r_dim % 64 == 0
     bkv_sz_per_kv_packing = bkv_p * page_size_per_kv_packing
     bkv_sz = bkv_sz_per_kv_packing * kv_packing
     page_size = page_size_per_kv_packing * kv_packing
@@ -1267,7 +1267,7 @@ def prepare_q_inputs(
     max_num_tokens, actual_num_q_heads, actual_head_dim = q.shape
     q_packing = get_dtype_packing(q.dtype)
     num_q_heads = align_to(actual_num_q_heads, q_packing)
-    head_dim = align_to(actual_head_dim, 128)
+    head_dim = actual_head_dim
     q = jnp.pad(
         q.reshape(
             max_num_tokens,
@@ -1297,7 +1297,7 @@ def prepare_kv_inputs(kv: jax.Array):
         pad = kv_packing - (max_num_tokens % kv_packing)
         kv = jnp.pad(kv, ((0, pad), (0, 0)), constant_values=0)
 
-    head_dim = align_to(actual_head_dim, 128)
+    head_dim = actual_head_dim
     kv = kv.reshape(-1, kv_packing, actual_head_dim)
     kv = jnp.pad(kv, ((0, 0), (0, 0), (0, head_dim - actual_head_dim)), constant_values=0)
     return kv
