@@ -401,7 +401,11 @@ class EPMoE(nnx.Module):
 
     @named_scope
     def __call__(self, hidden_states, topk_weights, topk_ids) -> jax.Array:
+        if self.layer_id in [3, 40, 77]:
+            jax.debug.print("MoE Layer {i} Input Max: {x}", i=self.layer_id, x=jnp.max(jnp.abs(hidden_states)))
+
         # Activation quantization is now handled per-GEMM inside _gmm_compute
+
         # (aligned with sglang-gpu scheme: quantize before each GEMM, dequantize after)
 
         # Run MoE computation on the expert-parallel mesh

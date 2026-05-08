@@ -309,7 +309,8 @@ class Glm5Attention(nnx.Module):
         q = q.reshape(-1, self.q_head_num, self.qk_head_dim)
         
         # Call indexer
-        topk_ids = self.indexer(hidden_states, q_compressed, positions, self.rotary_emb)
+        # topk_ids = self.indexer(hidden_states, q_compressed, positions, self.rotary_emb)
+
 
 
         q_nope = q[:, :, : self.qk_nope_head_dim]
@@ -340,7 +341,6 @@ class Glm5Attention(nnx.Module):
             token_to_kv_pool=token_to_kv_pool,
             q_rope=q_rope,
             k_rope=k_rope,
-            topk_ids=topk_ids,
         )
 
         # o_v[t, h, d] = sum_r attn_output[t, h, r] * w_uv[r, h, d]
