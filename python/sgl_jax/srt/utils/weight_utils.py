@@ -1068,10 +1068,9 @@ class WeightLoader:
 
                 return _load_slice
 
-            lazy_array = jax.make_array_from_callback(
-                shape, sharding, _make_load_slice(), dtype=target_dtype
-            ).astype(target_dtype)
-
+            lazy_array = jax.make_array_from_callback(shape, sharding, _make_load_slice()).astype(
+                target_dtype
+            )
 
             lazy_arrays.append(lazy_array)
 
