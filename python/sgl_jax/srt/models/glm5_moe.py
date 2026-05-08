@@ -240,7 +240,7 @@ class Glm5Attention(nnx.Module):
             rotary_dim=self.qk_rope_head_dim,
             max_position_embeddings=max_position_embeddings,
             base=rope_theta,
-            is_neox_style=True,
+            is_neox_style=False,
             dtype=dtype,
             mesh=mesh,
         )
