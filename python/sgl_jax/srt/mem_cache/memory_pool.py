@@ -1236,6 +1236,9 @@ class MemoryPools:
         except KeyError:
             raise AttributeError(f"MemoryPools has no pool '{name}'") from None
 
+    def get_fused_kv_buffer(self, layer_id: int) -> jax.Array:
+        return self._pools['token_to_kv_pool'].get_fused_kv_buffer(layer_id)
+
     def tree_flatten(self):
         keys = sorted(self._pools.keys())
         return [self._pools[k] for k in keys], tuple(keys)
