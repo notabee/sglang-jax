@@ -322,13 +322,15 @@ class MLAAttentionBackend(AttentionBackend):
             distribution_,
         ):
             def callback_func(ql_nope, new_kv_c):
-                print(f"[Host Callback] ql_nope shape: {ql_nope.shape}, mean: {np.mean(ql_nope)}")
-                print(f"[Host Callback] new_kv_c shape: {new_kv_c.shape}, mean: {np.mean(new_kv_c)}")
+                if layer.layer_id == 0:
+                    print(f"[Host Callback] Layer 0: ql_nope shape: {ql_nope.shape}, mean: {np.mean(ql_nope)}")
+                    print(f"[Host Callback] Layer 0: new_kv_c shape: {new_kv_c.shape}, mean: {np.mean(new_kv_c)}")
 
             jax.debug.callback(callback_func, ql_nope_, new_kv_c_)
             
-            jax.debug.print("[_run Debug] ql_nope_ mean={}", jnp.mean(ql_nope_))
-            jax.debug.print("[_run Debug] new_kv_c_ mean={}", jnp.mean(new_kv_c_))
+            if layer.layer_id == 0:
+                jax.debug.print("[_run Debug] Layer 0: ql_nope_ mean={}", jnp.mean(ql_nope_))
+                jax.debug.print("[_run Debug] Layer 0: new_kv_c_ mean={}", jnp.mean(new_kv_c_))
 
             return mla_ragged_paged_attention(
                 ql_nope_,
@@ -348,7 +350,7 @@ class MLAAttentionBackend(AttentionBackend):
                 num_queries_per_block=self.num_queries_per_block,
                 decode_batch_size=self.decode_batch_size,
                 vmem_limit_bytes=self.vmem_limit_bytes,
-                debug_mode=True,
+                debug_mode=(layer.layer_id == 0),
             )
 
         o_latent, updated_cache = jax.shard_map(
