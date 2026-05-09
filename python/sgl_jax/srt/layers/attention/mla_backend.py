@@ -339,10 +339,7 @@ class MLAAttentionBackend(AttentionBackend):
                 num_queries_per_block=self.num_queries_per_block,
                 decode_batch_size=self.decode_batch_size,
                 vmem_limit_bytes=self.vmem_limit_bytes,
-                debug_mode=False,
             )
-
-
 
         o_latent, updated_cache = jax.shard_map(
             _run,
