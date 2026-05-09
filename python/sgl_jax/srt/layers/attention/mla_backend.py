@@ -345,6 +345,8 @@ class MLAAttentionBackend(AttentionBackend):
         if layer.layer_id == 0:
             jax.debug.print("[Global Debug] Layer 0: ql_nope mean={}", jnp.mean(ql_nope))
             jax.debug.print("[Global Debug] Layer 0: new_kv_c mean={}", jnp.mean(new_kv_c))
+            jax.debug.print("[Global Debug] Layer 0: q_pe mean={}", jnp.mean(q_pe))
+            jax.debug.print("[Global Debug] Layer 0: new_k_pe mean={}", jnp.mean(new_k_pe))
 
         o_latent, updated_cache = jax.shard_map(
             _run,
