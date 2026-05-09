@@ -305,7 +305,7 @@ class Glm5Attention(nnx.Module):
             return
         w_kv = self.kv_b_proj.weight.value.reshape(
             self.kv_lora_rank,
-            self.q_head_num,
+            self.num_heads,
             self.qk_nope_head_dim + self.v_head_dim,
         )
         self.w_uk.value = w_kv[:, :, : self.qk_nope_head_dim]
