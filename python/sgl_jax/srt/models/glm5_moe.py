@@ -352,7 +352,7 @@ class Glm5Attention(nnx.Module):
         k_rope = jnp.broadcast_to(
             k_rope,
             (k_rope.shape[0], self.num_heads, self.qk_rope_head_dim),
-            out_sharding=P(None, "tensor", None),
+            out_sharding=P("data", "tensor", None),
         )
 
         q = jnp.concatenate([q_nope, q_rope], axis=-1)
