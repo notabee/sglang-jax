@@ -183,8 +183,6 @@ class MLAAttentionBackend(AttentionBackend):
         else:
             raise ValueError(f"Invalid forward mode: {batch.forward_mode}")
 
-        print(f"[MLA Backend] mode={batch.forward_mode}, page_indices={page_indices[:20]}, cu_q_lens={cu_q_lens[:10]}, cu_kv_lens={cu_kv_lens[:10]}, seq_lens={seq_lens[:20]}, distribution={distribution}")
-
         (
             metadata.cu_q_lens,
             metadata.cu_kv_lens,

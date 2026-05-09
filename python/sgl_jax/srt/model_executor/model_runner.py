@@ -765,8 +765,6 @@ class ModelRunner(BaseModelRunner):
             else:
                 logger.debug("logits_metadata %s: %s", key, value)
 
-        print(f"[MR Debug] bid: {forward_batch.bid}, mode: {forward_batch.forward_mode}, input_ids: {forward_batch.input_ids}, out_cache_loc: {forward_batch.out_cache_loc}, cache_loc: {forward_batch.cache_loc}, positions: {forward_batch.positions}, seq_lens: {forward_batch.seq_lens}")
-
         with jtu.count_pjit_cpp_cache_miss() as count:
             output, layers_kv_fused, _, layers_topk_ids = self.jitted_run_model(
                 forward_batch, logits_metadata
