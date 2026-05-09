@@ -486,7 +486,7 @@ class Glm5DecoderLayer(nnx.Module):
             attention_bias=getattr(config, "attention_bias", False),
             dtype=dtype,
             mesh=mesh,
-            use_absorbed=getattr(config, "use_absorbed_mla", True),
+            use_absorbed=False,
         )
 
         first_k_dense_replace = getattr(config, "first_k_dense_replace", 0)
