@@ -38,11 +38,6 @@ class SglangMMLUEval(Eval):
         self.num_threads = num_threads
 
     def __call__(self, sampler: SamplerBase) -> EvalResult:
-        # Attempt to set max_tokens=1 on the sampler to replicate SGLang's behavior
-        original_max_tokens = getattr(sampler, "max_tokens", None)
-        if original_max_tokens is not None:
-            sampler.max_tokens = 1
-            
         def fn(row: dict):
             subject = row["Subject"]
             shots = self.shots.get(subject, [])
@@ -58,11 +53,19 @@ class SglangMMLUEval(Eval):
             prompt += f"A. {row['A']}\nB. {row['B']}\nC. {row['C']}\nD. {row['D']}\n"
             prompt += "Answer:"
             
-            prompt_messages = [
-                {"role": "user", "content": prompt}
-            ]
-            
-            response_text = sampler(prompt_messages)
+            # Use raw completions to bypass chat templates
+            try:
+                response = sampler.client.completions.create(
+                    model=sampler.model,
+                    prompt=prompt,
+                    temperature=0,
+                    max_tokens=1,
+                )
+                response_text = response.choices[0].text
+            except Exception as e:
+                # Fallback to chat completions if raw fails
+                prompt_messages = [{"role": "user", "content": prompt}]
+                response_text = sampler(prompt_messages)
             
             # Direct answer extraction: take the first non-whitespace character
             extracted_answer = response_text.strip()[0] if len(response_text.strip()) > 0 else None
@@ -78,14 +81,8 @@ class SglangMMLUEval(Eval):
                 html=f"<p>Prompt: {prompt}</p><p>Response: {response_text}</p><p>Extracted: {extracted_answer}</p>",
                 score=score,
                 metrics={category: score},
-                convo=prompt_messages + [{"role": "assistant", "content": response_text}]
+                convo=[{"role": "user", "content": prompt}, {"role": "assistant", "content": response_text}]
             )
 
-        try:
-            results = common.map_with_progress(fn, self.test_examples, self.num_threads)
-        finally:
-            # Restore original max_tokens
-            if original_max_tokens is not None:
-                sampler.max_tokens = original_max_tokens
-                
+        results = common.map_with_progress(fn, self.test_examples, self.num_threads)
         return common.aggregate_results(results)
