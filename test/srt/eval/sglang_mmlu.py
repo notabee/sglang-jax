@@ -78,7 +78,7 @@ class SglangMMLUEval(Eval):
             category = subject2category.get(subject, "other")
             
             return SingleEvalResult(
-                html=f"<p>Prompt: {prompt}</p><p>Response: {response_text}</p><p>Extracted: {extracted_answer}</p>",
+                html=f"<p>Prompt: {prompt}</p><p>Response: {response_text}</p><p>Extracted: {extracted_answer}</p><p>Correct Answer: {row['Answer']}</p>",
                 score=score,
                 metrics={category: score},
                 convo=[{"role": "user", "content": prompt}, {"role": "assistant", "content": response_text}]
