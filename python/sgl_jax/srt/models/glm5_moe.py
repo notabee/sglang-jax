@@ -968,6 +968,7 @@ class Glm5ForCausalLM(nnx.Module):
 
             num_logical_experts = self.config.n_routed_experts
             moe_backend = getattr(self.config, "moe_backend", "epmoe")
+            use_fused = moe_backend == "fused" or moe_backend == MoEBackend.FUSED
 
             moe_mappings = create_moe_weights_mapping(
                 prefix=prefix,
