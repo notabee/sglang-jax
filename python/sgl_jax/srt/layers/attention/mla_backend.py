@@ -122,6 +122,15 @@ class MLAAttentionBackend(AttentionBackend):
         self.vmem_limit_bytes = vmem_limit_bytes
         self.num_kv_pages_per_block = num_kv_pages_per_block
         self.num_queries_per_block = num_queries_per_block
+        # Check environment override for MLA decode_batch_size to autotune MXU matrix utilization on TPU cores
+        import os
+        env_val = os.getenv("SGL_JAX_MLA_DECODE_BATCH_SIZE")
+        if env_val is not None:
+            try:
+                decode_batch_size = int(env_val)
+                logger.info(f"Dynamic MLA attention decode_batch_size override loaded: {decode_batch_size}")
+            except ValueError:
+                logger.warning(f"Invalid SGL_JAX_MLA_DECODE_BATCH_SIZE environment value: {env_val}, using default.")
         self.decode_batch_size = decode_batch_size
 
         self.forward_metadata = nnx.data(MLAAttentionMetadata())

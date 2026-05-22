@@ -1015,43 +1015,57 @@ class Glm5ForCausalLM(nnx.Module):
 
             num_shared = getattr(self.config, "n_shared_experts", 0)
             if num_shared > 0:
-                mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.gate_proj.{w_name}",
-                    sharding=(None, "tensor"),
-                    transpose=True,
-                )
-                mappings[f"{prefix}.mlp.shared_experts.up_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.up_proj.{w_name}",
-                    sharding=(None, "tensor"),
-                    transpose=True,
-                )
-                mappings[f"{prefix}.mlp.shared_experts.down_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.down_proj.{w_name}",
-                    sharding=("tensor", None),
-                    transpose=True,
-                )
-                if is_static_quant:
-                    mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale_inv"] = (
-                        WeightMapping(
-                            target_path=f"{target_prefix}.shared_experts.gate_proj.weight_scale",
-                            sharding=(None,),
-                            transpose=False,
+                if use_fused:
+                    # FusedEPMoE: shared experts live as w*_shared on self.mlp
+                    for hf_name, target_name in [
+                        ("gate_proj", "w1_shared"),
+                        ("up_proj", "w3_shared"),
+                        ("down_proj", "w2_shared"),
+                    ]:
+                        mappings[f"{prefix}.mlp.shared_experts.{hf_name}.weight"] = WeightMapping(
+                            target_path=f"{target_prefix}.mlp.{target_name}",
+                            sharding=(None, None),
+                            transpose=True,
                         )
+                else:
+                    # EPMoE: shared experts live on self.shared_experts module
+                    mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight"] = WeightMapping(
+                        target_path=f"{target_prefix}.shared_experts.gate_proj.{w_name}",
+                        sharding=(None, "tensor"),
+                        transpose=True,
                     )
-                    mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale_inv"] = (
-                        WeightMapping(
-                            target_path=f"{target_prefix}.shared_experts.up_proj.weight_scale",
-                            sharding=(None,),
-                            transpose=False,
+                    mappings[f"{prefix}.mlp.shared_experts.up_proj.weight"] = WeightMapping(
+                        target_path=f"{target_prefix}.shared_experts.up_proj.{w_name}",
+                        sharding=(None, "tensor"),
+                        transpose=True,
+                    )
+                    mappings[f"{prefix}.mlp.shared_experts.down_proj.weight"] = WeightMapping(
+                        target_path=f"{target_prefix}.shared_experts.down_proj.{w_name}",
+                        sharding=("tensor", None),
+                        transpose=True,
+                    )
+                    if is_static_quant:
+                        mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale_inv"] = (
+                            WeightMapping(
+                                target_path=f"{target_prefix}.shared_experts.gate_proj.weight_scale",
+                                sharding=(None,),
+                                transpose=False,
+                            )
                         )
-                    )
-                    mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale_inv"] = (
-                        WeightMapping(
-                            target_path=f"{target_prefix}.shared_experts.down_proj.weight_scale",
-                            sharding=(None,),
-                            transpose=False,
+                        mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale_inv"] = (
+                            WeightMapping(
+                                target_path=f"{target_prefix}.shared_experts.up_proj.weight_scale",
+                                sharding=(None,),
+                                transpose=False,
+                            )
                         )
-                    )
+                        mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale_inv"] = (
+                            WeightMapping(
+                                target_path=f"{target_prefix}.shared_experts.down_proj.weight_scale",
+                                sharding=(None,),
+                                transpose=False,
+                            )
+                        )
 
         return mappings
 

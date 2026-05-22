@@ -45,6 +45,8 @@ class BenchArgs:
     show_report: bool = False
     profile: bool = False
     profile_by_stage: bool = False
+    profile_dir: str = ""
+    profile_steps: int = 3
     api_type: str = "native"  # "native" or "openai"
 
     @staticmethod
@@ -71,6 +73,18 @@ class BenchArgs:
         parser.add_argument("--show-report", action="store_true")
         parser.add_argument("--profile", action="store_true")
         parser.add_argument("--profile-by-stage", action="store_true")
+        parser.add_argument(
+            "--profile-dir",
+            type=str,
+            default=BenchArgs.profile_dir,
+            help="Directory to dump profiling traces. Default: /tmp/sgl-jax-profile",
+        )
+        parser.add_argument(
+            "--profile-steps",
+            type=int,
+            default=BenchArgs.profile_steps,
+            help="Number of forward steps to profile. Default: 3",
+        )
         parser.add_argument(
             "--api-type",
             type=str,
@@ -130,6 +144,8 @@ def run_one_case(
     tokenizer,
     profile: bool = False,
     profile_by_stage: bool = False,
+    profile_dir: str = "",
+    profile_steps: int = 3,
     api_type: str = "native",
 ):
     requests.post(url + "/flush_cache")
@@ -162,7 +178,14 @@ def run_one_case(
 
     profile_link = None
     if profile:
-        profile_link: str = run_profile(url, 3, ["CPU", "GPU"], None, None, profile_by_stage)
+        profile_link: str = run_profile(
+            url,
+            profile_steps,
+            ["CPU", "GPU"],
+            profile_dir if profile_dir else None,
+            None,
+            profile_by_stage,
+        )
 
     tic = time.perf_counter()
 
@@ -379,6 +402,8 @@ def run_benchmark(server_args: ServerArgs, bench_args: BenchArgs):
                                 tokenizer=tokenizer,
                                 profile=bench_args.profile,
                                 profile_by_stage=bench_args.profile_by_stage,
+                                profile_dir=bench_args.profile_dir,
+                                profile_steps=bench_args.profile_steps,
                                 api_type=bench_args.api_type,
                             )[-1],
                         )
