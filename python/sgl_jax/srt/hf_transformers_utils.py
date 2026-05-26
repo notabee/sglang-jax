@@ -228,9 +228,16 @@ def get_tokenizer(
             import json
             with open(config_file) as f:
                 tc = json.load(f)
+            is_patched = False
             if tc.get("tokenizer_class") == "TokenizersBackend":
                 logger.info("Patching tokenizer_class 'TokenizersBackend' inside tokenizer_config.json")
                 tc.pop("tokenizer_class", None)
+                is_patched = True
+            if "extra_special_tokens" in tc and isinstance(tc["extra_special_tokens"], list):
+                logger.info("Patching list-type extra_special_tokens inside tokenizer_config.json")
+                tc.pop("extra_special_tokens", None)
+                is_patched = True
+            if is_patched:
                 with open(config_file, "w") as f:
                     json.dump(tc, f, indent=2)
         except Exception as e:
