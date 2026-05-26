@@ -1,9 +1,12 @@
 """Utilities for Huggingface Transformers."""
 
 import contextlib
+import logging
 import os
 import warnings
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from huggingface_hub import snapshot_download
 from transformers import (
