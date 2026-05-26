@@ -24,16 +24,11 @@ from sgl_jax.srt.managers.tiktoken_tokenizer import TiktokenTokenizer
 from sgl_jax.srt.utils.common_utils import is_remote_url, lru_cache_frozenset
 
 
-class GlmMoeDsaConfig(PretrainedConfig):
-    model_type = "glm_moe_dsa"
-
-
 _CONFIG_REGISTRY: dict[str, type[PretrainedConfig]] = {
     cls.model_type: cls
     for cls in [
         BailingHybridConfig,
         KimiLinearConfig,
-        GlmMoeDsaConfig,
     ]
 }
 
@@ -218,7 +213,22 @@ def get_tokenizer(
         sub_dir_path = tokenizer_name + "/" + sub_dir
         if os.path.isdir(sub_dir_path):
             tokenizer_name = sub_dir_path
-        # else: use the root path, tokenizer might be in model root
+    # Dynamic fix for non-standard "TokenizersBackend" tokenizer class
+    # which is common in GLM-5.1 and other Z.ai models.
+    config_file = os.path.join(tokenizer_name, "tokenizer_config.json")
+    if os.path.exists(config_file):
+        try:
+            import json
+            with open(config_file) as f:
+                tc = json.load(f)
+            if tc.get("tokenizer_class") == "TokenizersBackend":
+                logger.info("Patching tokenizer_class 'TokenizersBackend' inside tokenizer_config.json")
+                tc.pop("tokenizer_class", None)
+                with open(config_file, "w") as f:
+                    json.dump(tc, f, indent=2)
+        except Exception as e:
+            logger.warning("Failed to patch tokenizer_config.json: %s", e)
+
     try:
         tokenizer = AutoTokenizer.from_pretrained(
             tokenizer_name,
