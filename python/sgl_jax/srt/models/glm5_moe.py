@@ -307,11 +307,20 @@ class Glm5Attention(nnx.Module):
             # Non-quantized LinearBase
             raw_weight = self.kv_b_proj.weight.value
         else:
-            # QuantizedLinear (static FP8 per-channel)
+            # QuantizedLinear (static FP8)
             wq = self.kv_b_proj.weight_q.value  # [out, in]
-            ws = self.kv_b_proj.weight_scale.value  # [out]
+            ws = self.kv_b_proj.weight_scale.value
             wq_f32 = wq.T.astype(jnp.float32)  # [in, out]
-            raw_weight = (wq_f32 * ws.astype(jnp.float32)[None, :]).astype(jnp.bfloat16)
+            if ws.ndim == 4:
+                ws_squeezed = jnp.squeeze(ws, axis=0)  # [in_blocks, 1, out]
+                in_blocks, _, n_out = ws_squeezed.shape
+                block_k = wq.shape[1] // in_blocks
+                wq_f32 = wq_f32.reshape(in_blocks, block_k, n_out)
+                wq_f32 = (wq_f32 * ws_squeezed.astype(jnp.float32)).reshape(in_blocks * block_k, n_out)
+            else:
+                # Per-channel: [out]
+                wq_f32 = wq_f32 * ws.astype(jnp.float32)[None, :]
+            raw_weight = wq_f32.astype(jnp.bfloat16)
 
         w_kv = raw_weight.reshape(
             self.kv_lora_rank,
