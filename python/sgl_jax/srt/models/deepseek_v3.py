@@ -840,14 +840,11 @@ class DeepseekV3ForCausalLM(nnx.Module):
             )
             # HF block scale is `[out_blocks, in_blocks]`; WeightLoader's
             # _maybe_expand_linear_block_scale expands to `[in_blocks, 1, n_out]`.
-            # QuantizedLinear.__call__ expects sharding P(kernel_axes[0], None,
-            # kernel_axes[1]) on the 3D result, which maps back to the 2D
-            # checkpoint as sharding_quant = (out_blocks_axis, in_blocks_axis):
-            #   col-parallel: ("tensor", None) → 3D axis 2 sharded.
-            #   row-parallel: (None, "tensor") → 3D axis 0 sharded.
+            # Load replicated on the block dims to avoid non-divisible shape crashes on large TP sizes;
+            # JAX automatically reshards to model_param.value.sharding upon assignment.
             mappings[f"{hf_prefix}.weight_scale_inv"] = WeightMapping(
                 target_path=f"{target_prefix}.weight_scale",
-                sharding=sharding_quant,
+                sharding=(None, None),
                 transpose=False,
             )
 
