@@ -40,6 +40,8 @@ _CONFIG_REGISTRY: dict[str, type[PretrainedConfig]] = {
 for name, cls in _CONFIG_REGISTRY.items():
     with contextlib.suppress(ValueError):
         AutoConfig.register(name, cls)
+        if name == "glm_moe_dsa":
+            AutoTokenizer.register(cls, fast_tokenizer_class=PreTrainedTokenizerFast)
 
 
 _UNSET = object()
