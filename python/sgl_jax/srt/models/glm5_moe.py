@@ -303,7 +303,17 @@ class Glm5Attention(nnx.Module):
             return
         if self.kv_b_proj is None:
             return
-        w_kv = self.kv_b_proj.weight.value.reshape(
+        if hasattr(self.kv_b_proj, "weight"):
+            # Non-quantized LinearBase
+            raw_weight = self.kv_b_proj.weight.value
+        else:
+            # QuantizedLinear (static FP8 per-channel)
+            wq = self.kv_b_proj.weight_q.value  # [out, in]
+            ws = self.kv_b_proj.weight_scale.value  # [out]
+            wq_f32 = wq.T.astype(jnp.float32)  # [in, out]
+            raw_weight = (wq_f32 * ws.astype(jnp.float32)[None, :]).astype(jnp.bfloat16)
+
+        w_kv = raw_weight.reshape(
             self.kv_lora_rank,
             self.num_heads,
             self.qk_nope_head_dim + self.v_head_dim,
@@ -486,7 +496,7 @@ class Glm5DecoderLayer(nnx.Module):
             attention_bias=getattr(config, "attention_bias", False),
             dtype=dtype,
             mesh=mesh,
-            use_absorbed=False,
+            use_absorbed=getattr(config, "use_absorbed_mla", True),
         )
 
         first_k_dense_replace = getattr(config, "first_k_dense_replace", 0)
