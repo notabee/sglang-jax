@@ -168,6 +168,22 @@ class ModelWorker:
                 dp_size,
             )
 
+        # Adjust max_running_requests for Fused MoE EP alignment if active
+        ep_size = getattr(self.model_config.hf_config, "ep_size", 1)
+        moe_backend = getattr(self.model_config.hf_config, "moe_backend", "epmoe")
+        if moe_backend == "fused" and ep_size > 1:
+            if self.max_running_requests < ep_size:
+                self.max_running_requests = ep_size
+            elif self.max_running_requests % ep_size != 0:
+                original_value = self.max_running_requests
+                self.max_running_requests = (self.max_running_requests // ep_size) * ep_size
+                logger.warning(
+                    "Adjusted max_running_requests from %s to %s to be divisible by ep_size (%s)",
+                    original_value,
+                    self.max_running_requests,
+                    ep_size,
+                )
+
         assert self.max_running_requests > 0, "max_running_request is zero"
 
         # A single request lives on one DP rank, so max_req_len is bounded
