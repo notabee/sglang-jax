@@ -1,12 +1,9 @@
 """Utilities for Huggingface Transformers."""
 
 import contextlib
-import logging
 import os
 import warnings
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
 
 from huggingface_hub import snapshot_download
 from transformers import (
@@ -43,33 +40,6 @@ _CONFIG_REGISTRY: dict[str, type[PretrainedConfig]] = {
 for name, cls in _CONFIG_REGISTRY.items():
     with contextlib.suppress(ValueError):
         AutoConfig.register(name, cls)
-
-# Register custom configuration classes with AutoTokenizer to prevent KeyError on startup.
-# We map them to standard fast/slow classes dynamically from TOKENIZER_MAPPING to ensure
-# dynamic loading without hardcoded dependencies, falling back to PreTrainedTokenizerFast.
-from transformers.models.auto.tokenization_auto import TOKENIZER_MAPPING
-
-slow_tok_fallback = None
-fast_tok_fallback = PreTrainedTokenizerFast
-
-for standard_config_name in ["Qwen2Config", "LlamaConfig", "GPT2Config"]:
-    with contextlib.suppress(Exception):
-        import importlib
-        transformers_module = importlib.import_module("transformers")
-        config_cls = getattr(transformers_module, standard_config_name, None)
-        if config_cls is not None and config_cls in TOKENIZER_MAPPING:
-            pair = TOKENIZER_MAPPING[config_cls]
-            if isinstance(pair, tuple) and len(pair) == 2:
-                slow_tok_fallback, fast_tok_fallback = pair
-                break
-
-for cls in [BailingHybridConfig, KimiLinearConfig, GlmMoeDsaConfig]:
-    with contextlib.suppress(Exception):
-        AutoTokenizer.register(
-            cls,
-            slow_tokenizer_class=slow_tok_fallback,
-            fast_tokenizer_class=fast_tok_fallback,
-        )
 
 
 _UNSET = object()
@@ -249,29 +219,6 @@ def get_tokenizer(
         if os.path.isdir(sub_dir_path):
             tokenizer_name = sub_dir_path
         # else: use the root path, tokenizer might be in model root
-    # Dynamic fix for non-standard "TokenizersBackend" tokenizer class
-    # which is common in GLM-5.1 and other Z.ai models.
-    config_file = os.path.join(tokenizer_name, "tokenizer_config.json")
-    if os.path.exists(config_file):
-        try:
-            import json
-            with open(config_file) as f:
-                tc = json.load(f)
-            is_patched = False
-            if tc.get("tokenizer_class") == "TokenizersBackend":
-                logger.info("Patching tokenizer_class 'TokenizersBackend' inside tokenizer_config.json")
-                tc.pop("tokenizer_class", None)
-                is_patched = True
-            if "extra_special_tokens" in tc and isinstance(tc["extra_special_tokens"], list):
-                logger.info("Patching list-type extra_special_tokens inside tokenizer_config.json")
-                tc.pop("extra_special_tokens", None)
-                is_patched = True
-            if is_patched:
-                with open(config_file, "w") as f:
-                    json.dump(tc, f, indent=2)
-        except Exception as e:
-            logger.warning("Failed to patch tokenizer_config.json: %s", e)
-
     try:
         tokenizer = AutoTokenizer.from_pretrained(
             tokenizer_name,

@@ -258,7 +258,6 @@ class ModelConfig:
                     weight_block_size = (int(weight_block_size[0]), int(weight_block_size[1]))
                 else:
                     weight_block_size = None
-                is_deepseek_or_glm = any(any(x in arch for x in ("Deepseek", "Glm", "GLM")) for arch in self.hf_config.architectures)
                 quant_config = QuantizationConfig(
                     is_static_checkpoint=True,
                     linear_rules=[
@@ -272,7 +271,6 @@ class ModelConfig:
                     moe_activation_dtype=None,
                     ignored_layers=ignored_layers,
                     weight_block_size=weight_block_size,
-                    allow_narrow_n_blockwise=is_deepseek_or_glm,
                 )
                 return quant_config
 
@@ -364,7 +362,6 @@ class ModelConfig:
                             len(ignored_layers),
                         )
 
-                    is_deepseek_or_glm = any(any(x in arch for x in ("Deepseek", "Glm", "GLM")) for arch in self.hf_config.architectures)
                     quant_config = QuantizationConfig(
                         is_static_checkpoint=True,
                         linear_rules=[
@@ -378,7 +375,6 @@ class ModelConfig:
                         moe_activation_dtype=None,
                         ignored_layers=list(ignored_layers),
                         weight_block_size=weight_block_size,
-                        allow_narrow_n_blockwise=is_deepseek_or_glm,
                     )
                     return quant_config
                 else:
