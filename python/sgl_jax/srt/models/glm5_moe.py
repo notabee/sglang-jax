@@ -835,7 +835,19 @@ class Glm5ForCausalLM(nnx.Module):
         }
 
         def add_linear(hf_name: str, target_name: str, sharding_std: tuple):
-            if not is_static_quant:
+            from sgl_jax.srt.layers.linear import QuantizedLinear
+
+            # Resolve the target projection module instance on self
+            keys = target_name.split(".")
+            module = self.model.layers[layer_idx]
+            for key in keys:
+                module = getattr(module, key, None)
+                if module is None:
+                    break
+            
+            is_quantized = isinstance(module, QuantizedLinear) if module is not None else False
+
+            if not is_quantized:
                 mappings[f"{prefix}.{hf_name}.weight"] = WeightMapping(
                     target_path=f"{target_prefix}.{target_name}.weight",
                     sharding=sharding_std,
