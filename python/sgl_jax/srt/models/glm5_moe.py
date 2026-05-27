@@ -311,12 +311,12 @@ class Glm5Attention(nnx.Module):
             wq = self.kv_b_proj.weight_q.value  # [out, in]
             ws = self.kv_b_proj.weight_scale.value
             wq_f32 = wq.T.astype(jnp.float32)  # [in, out]
-            if ws.ndim == 4:
-                ws_squeezed = jnp.squeeze(ws, axis=0)  # [in_blocks, 1, out]
-                in_blocks, _, n_out = ws_squeezed.shape
+            if ws.ndim == 3:
+                # Block-wise: [in_blocks, 1, out] → dequantize block by block
+                in_blocks, _, n_out = ws.shape
                 block_k = wq.shape[1] // in_blocks
                 wq_f32 = wq_f32.reshape(in_blocks, block_k, n_out)
-                wq_f32 = (wq_f32 * ws_squeezed.astype(jnp.float32)).reshape(in_blocks * block_k, n_out)
+                wq_f32 = (wq_f32 * ws.astype(jnp.float32)).reshape(in_blocks * block_k, n_out)
             else:
                 # Per-channel: [out]
                 wq_f32 = wq_f32 * ws.astype(jnp.float32)[None, :]
@@ -834,146 +834,64 @@ class Glm5ForCausalLM(nnx.Module):
             ),
         }
 
-        w_name = "weight_q" if is_static_quant else "weight"
+        def add_linear(hf_name: str, target_name: str, sharding_std: tuple):
+            if not is_static_quant:
+                mappings[f"{prefix}.{hf_name}.weight"] = WeightMapping(
+                    target_path=f"{target_prefix}.{target_name}.weight",
+                    sharding=sharding_std,
+                    transpose=True,
+                )
+            else:
+                sharding_quant = (sharding_std[1], sharding_std[0]) if len(sharding_std) == 2 else sharding_std
+                mappings[f"{prefix}.{hf_name}.weight"] = WeightMapping(
+                    target_path=f"{target_prefix}.{target_name}.weight_q",
+                    sharding=sharding_quant,
+                    transpose=False,
+                )
+                mappings[f"{prefix}.{hf_name}.weight_scale_inv"] = WeightMapping(
+                    target_path=f"{target_prefix}.{target_name}.weight_scale",
+                    sharding=(None, None) if len(sharding_std) == 2 else (None,),
+                    transpose=False,
+                )
 
         # Attention mappings (separate Q, K, V in checkpoint)
         # Attention mappings (MLA)
-        mappings[f"{prefix}.self_attn.q_a_proj.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.q_a_proj.{w_name}",
-            sharding=(None, None),
-            transpose=True,
-        )
+        add_linear("self_attn.q_a_proj", "self_attn.q_a_proj", (None, None))
         mappings[f"{prefix}.self_attn.q_a_layernorm.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.q_a_layernorm.scale",
             sharding=(None,),
+            transpose=False,
         )
-        mappings[f"{prefix}.self_attn.q_b_proj.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.q_b_proj.{w_name}",
-            sharding=(None, "tensor"),
-            transpose=True,
-        )
-        mappings[f"{prefix}.self_attn.kv_a_proj_with_mqa.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.kv_a_proj_with_mqa.{w_name}",
-            sharding=(None, None),
-            transpose=True,
-        )
+        add_linear("self_attn.q_b_proj", "self_attn.q_b_proj", (None, "tensor"))
+        add_linear("self_attn.kv_a_proj_with_mqa", "self_attn.kv_a_proj_with_mqa", (None, None))
         mappings[f"{prefix}.self_attn.kv_a_layernorm.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.kv_a_layernorm.scale",
             sharding=(None,),
+            transpose=False,
         )
-        mappings[f"{prefix}.self_attn.kv_b_proj.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.kv_b_proj.{w_name}",
-            sharding=(None, "tensor"),
-            transpose=True,
-        )
-        mappings[f"{prefix}.self_attn.o_proj.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.o_proj.{w_name}",
-            sharding=("tensor", None),
-            transpose=True,
-        )
+        add_linear("self_attn.kv_b_proj", "self_attn.kv_b_proj", (None, "tensor"))
+        add_linear("self_attn.o_proj", "self_attn.o_proj", ("tensor", None))
 
         # Indexer mappings
-        mappings[f"{prefix}.self_attn.indexer.wq_b.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.indexer.wq_b.{w_name}",
-            sharding=(None, None),
-            transpose=True,
-        )
-        mappings[f"{prefix}.self_attn.indexer.wk.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.indexer.wk.{w_name}",
-            sharding=(None, None),
-            transpose=True,
-        )
-        mappings[f"{prefix}.self_attn.indexer.weights_proj.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.indexer.weights_proj.{w_name}",
-            sharding=(None, None),
-            transpose=True,
-        )
+        add_linear("self_attn.indexer.wq_b", "self_attn.indexer.wq_b", (None, None))
+        add_linear("self_attn.indexer.wk", "self_attn.indexer.wk", (None, None))
+        add_linear("self_attn.indexer.weights_proj", "self_attn.indexer.weights_proj", (None, None))
+        
         mappings[f"{prefix}.self_attn.indexer.k_norm.weight"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.indexer.k_norm.weight",
             sharding=(None,),
+            transpose=False,
         )
         mappings[f"{prefix}.self_attn.indexer.k_norm.bias"] = WeightMapping(
             target_path=f"{target_prefix}.self_attn.indexer.k_norm.bias",
             sharding=(None,),
-        )
-
-        if is_static_quant:
-            mappings[f"{prefix}.self_attn.q_a_proj.weight_scale_inv"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.q_a_proj.weight_scale",
-                sharding=(None,),
-                transpose=False,
-            )
-            mappings[f"{prefix}.self_attn.q_b_proj.weight_scale_inv"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.q_b_proj.weight_scale",
-                sharding=("tensor",),
-                transpose=False,
-            )
-            mappings[f"{prefix}.self_attn.kv_a_proj_with_mqa.weight_scale_inv"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.kv_a_proj_with_mqa.weight_scale",
-                sharding=(None,),
-                transpose=False,
-            )
-            mappings[f"{prefix}.self_attn.kv_b_proj.weight_scale_inv"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.kv_b_proj.weight_scale",
-                sharding=("tensor",),
-                transpose=False,
-            )
-            mappings[f"{prefix}.self_attn.o_proj.weight_scale_inv"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.o_proj.weight_scale",
-                sharding=(None,),
-                transpose=False,
-            )
-            mappings[f"{prefix}.self_attn.indexer.wk.weight_scale_inv"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.indexer.wk.weight_scale",
-                sharding=(None,),
-                transpose=False,
-            )
-            mappings[f"{prefix}.self_attn.indexer.wq_b.weight_scale_inv"] = WeightMapping(
-                target_path=f"{target_prefix}.self_attn.indexer.wq_b.weight_scale",
-                sharding=(None,),
-                transpose=False,
-            )
-
-        # DSA Indexer Norm
-        mappings[f"{prefix}.self_attn.indexer.k_norm.weight"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.indexer.k_norm.weight", sharding=(None,)
-        )
-        mappings[f"{prefix}.self_attn.indexer.k_norm.bias"] = WeightMapping(
-            target_path=f"{target_prefix}.self_attn.indexer.k_norm.bias", sharding=(None,)
+            transpose=False,
         )
 
         if is_mlp_layer:
-            mappings[f"{prefix}.mlp.gate_proj.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.mlp.gate_proj.{w_name}",
-                sharding=(None, "tensor"),
-                transpose=True,
-            )
-            mappings[f"{prefix}.mlp.up_proj.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.mlp.up_proj.{w_name}",
-                sharding=(None, "tensor"),
-                transpose=True,
-            )
-            mappings[f"{prefix}.mlp.down_proj.weight"] = WeightMapping(
-                target_path=f"{target_prefix}.mlp.down_proj.{w_name}",
-                sharding=("tensor", None),
-                transpose=True,
-            )
-            if is_static_quant:
-                mappings[f"{prefix}.mlp.gate_proj.weight_scale_inv"] = WeightMapping(
-                    target_path=f"{target_prefix}.mlp.gate_proj.weight_scale",
-                    sharding=(None, None),
-                    transpose=False,
-                )
-                mappings[f"{prefix}.mlp.up_proj.weight_scale_inv"] = WeightMapping(
-                    target_path=f"{target_prefix}.mlp.up_proj.weight_scale",
-                    sharding=(None, None),
-                    transpose=False,
-                )
-                mappings[f"{prefix}.mlp.down_proj.weight_scale_inv"] = WeightMapping(
-                    target_path=f"{target_prefix}.mlp.down_proj.weight_scale",
-                    sharding=(None, None),
-                    transpose=False,
-                )
+            add_linear("mlp.gate_proj", "mlp.gate_proj", (None, "tensor"))
+            add_linear("mlp.up_proj", "mlp.up_proj", (None, "tensor"))
+            add_linear("mlp.down_proj", "mlp.down_proj", ("tensor", None))
         else:
             mappings[f"{prefix}.mlp.gate.weight"] = WeightMapping(
                 target_path=f"{target_prefix}.moe_gate.kernel",
@@ -1034,43 +952,9 @@ class Glm5ForCausalLM(nnx.Module):
 
             num_shared = getattr(self.config, "n_shared_experts", 0)
             if num_shared > 0:
-                mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.gate_proj.{w_name}",
-                    sharding=(None, "tensor"),
-                    transpose=True,
-                )
-                mappings[f"{prefix}.mlp.shared_experts.up_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.up_proj.{w_name}",
-                    sharding=(None, "tensor"),
-                    transpose=True,
-                )
-                mappings[f"{prefix}.mlp.shared_experts.down_proj.weight"] = WeightMapping(
-                    target_path=f"{target_prefix}.shared_experts.down_proj.{w_name}",
-                    sharding=("tensor", None),
-                    transpose=True,
-                )
-                if is_static_quant:
-                    mappings[f"{prefix}.mlp.shared_experts.gate_proj.weight_scale_inv"] = (
-                        WeightMapping(
-                            target_path=f"{target_prefix}.shared_experts.gate_proj.weight_scale",
-                            sharding=(None,),
-                            transpose=False,
-                        )
-                    )
-                    mappings[f"{prefix}.mlp.shared_experts.up_proj.weight_scale_inv"] = (
-                        WeightMapping(
-                            target_path=f"{target_prefix}.shared_experts.up_proj.weight_scale",
-                            sharding=(None,),
-                            transpose=False,
-                        )
-                    )
-                    mappings[f"{prefix}.mlp.shared_experts.down_proj.weight_scale_inv"] = (
-                        WeightMapping(
-                            target_path=f"{target_prefix}.shared_experts.down_proj.weight_scale",
-                            sharding=(None,),
-                            transpose=False,
-                        )
-                    )
+                add_linear("mlp.shared_experts.gate_proj", "shared_experts.gate_proj", (None, "tensor"))
+                add_linear("mlp.shared_experts.up_proj", "shared_experts.up_proj", (None, "tensor"))
+                add_linear("mlp.shared_experts.down_proj", "shared_experts.down_proj", ("tensor", None))
 
         return mappings
 
