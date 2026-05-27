@@ -1097,7 +1097,6 @@ class Glm5ForCausalLM(nnx.Module):
         return mappings
 
 
-class GlmMoeDsaForCausalLM(Glm5ForCausalLM):
     @classmethod
     def patch_model_config(cls, mc: ModelConfig) -> None:
         from sgl_jax.srt.configs.model_config import AttentionArch
@@ -1108,6 +1107,16 @@ class GlmMoeDsaForCausalLM(Glm5ForCausalLM):
         mc.v_head_dim = getattr(mc.hf_text_config, "v_head_dim", 256)
         # GLM-5 uses MLA architecture
         mc.attention_arch = AttentionArch.MLA
+
+        # Allow narrow-N blockwise quantization to prevent accuracy collapse runtime guard trigger
+        if mc.quantization_config is not None:
+            mc.quantization_config.allow_narrow_n_blockwise = True
+
+
+class GlmMoeDsaForCausalLM(Glm5ForCausalLM):
+    @classmethod
+    def patch_model_config(cls, mc: ModelConfig) -> None:
+        super().patch_model_config(mc)
 
 
 EntryClass = [Glm5ForCausalLM, GlmMoeDsaForCausalLM]
