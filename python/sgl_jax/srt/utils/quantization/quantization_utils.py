@@ -3,6 +3,7 @@
 import fnmatch
 import itertools
 import logging
+import math
 import re
 
 import jax
@@ -196,6 +197,33 @@ def apply_linear_quantization(
 
                     rule = _find_matching_rule(child_path)
                     if rule is not None:
+                        # Safety check: If this is a RowParallel block-quantized layer under JAX TP execution,
+                        # the block scale array must be sharded along the contraction axis (first dimension).
+                        # JAX's shard_map requires that the first dimension (in_blocks) is evenly divisible
+                        # by the tensor parallel (TP) sharding mesh size. If not, it will crash with a shape
+                        # mismatch ValueError during forward pass. We detect and prevent this here by keeping
+                        # such un-shardable layers in full precision (BF16).
+                        is_row_parallel = attr_value.kernel_axes is not None and len(attr_value.kernel_axes) > 0 and attr_value.kernel_axes[0] == "tensor"
+                        if is_row_parallel and rule["weight_block_size"] is not None and is_static_input:
+                            tp_size = 1
+                            if attr_value.mesh is not None and hasattr(attr_value.mesh, "shape") and "tensor" in attr_value.mesh.shape:
+                                tp_size = int(attr_value.mesh.shape["tensor"])
+                            
+                            in_features = attr_value.weight.value.shape[0]
+                            block_size_in = int(rule["weight_block_size"][1])
+                            in_blocks = math.ceil(in_features / block_size_in)
+                            
+                            if in_blocks % tp_size != 0:
+                                logger.warning(
+                                    "Skipping block quantization for row-parallel layer %s: "
+                                    "in_blocks (%d) is not evenly divisible by tp_size (%d). "
+                                    "Reverting to full precision (BF16) to avoid JAX shard_map shape mismatch crash.",
+                                    child_path,
+                                    in_blocks,
+                                    tp_size,
+                                )
+                                continue
+
                         logger.debug(
                             "Quantizing %s with weight_dtype=%s, activation_dtype=%s",
                             child_path,
