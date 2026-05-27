@@ -1126,6 +1126,12 @@ class Glm5ForCausalLM(nnx.Module):
         # Allow narrow-N blockwise quantization to prevent accuracy collapse runtime guard trigger
         if mc.quantization_config is not None:
             mc.quantization_config.allow_narrow_n_blockwise = True
+            # Enable dynamic activation quantization (W8A8) for native FP8 math on TPU hardware
+            mc.quantization_config.moe_activation_dtype = jnp.float8_e4m3fn
+            if mc.quantization_config.linear_rules:
+                for rule in mc.quantization_config.linear_rules:
+                    if rule.get("weight_dtype") == "float8_e4m3fn":
+                        rule["activation_dtype"] = "float8_e4m3fn"
 
 
 class GlmMoeDsaForCausalLM(Glm5ForCausalLM):
