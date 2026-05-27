@@ -234,9 +234,17 @@ def get_tokenizer(
                 trust_remote_code=trust_remote_code,
                 revision=tokenizer_revision,
             )
-            print(f"[DEBUG] Loaded config type: {type(config)}")
-
             import json
+            print(f"[DEBUG] Files in tokenizer path: {os.listdir(tokenizer_name)}")
+
+            tokenizer_config_file = os.path.join(tokenizer_name, "tokenizer_config.json")
+            if os.path.exists(tokenizer_config_file):
+                try:
+                    with open(tokenizer_config_file, "r") as f:
+                        print(f"[DEBUG] tokenizer_config.json content: {f.read()}")
+                except Exception as e:
+                    print(f"[DEBUG] Failed to print tokenizer_config.json content: {e}")
+
             tokenizer_class_name = None
 
             config_file = os.path.join(tokenizer_name, "config.json")
