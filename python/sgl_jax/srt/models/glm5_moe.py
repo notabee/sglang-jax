@@ -402,7 +402,7 @@ class Glm5Attention(nnx.Module):
         q, _ = self.q_b_proj(q_compressed)
         q = q.reshape(-1, self.num_heads, self.qk_head_dim)
 
-        _ = self.indexer(hidden_states, q_compressed, positions, self.rotary_emb)
+        # _ = self.indexer(hidden_states, q_compressed, positions, self.rotary_emb)
 
         q_nope = q[:, :, : self.qk_nope_head_dim]
         q_rope = q[:, :, self.qk_nope_head_dim :]
