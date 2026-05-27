@@ -1038,11 +1038,12 @@ class Glm5ForCausalLM(nnx.Module):
                     target_scale_param = target_param + "_scale"
                     scale_src_paths = [p.replace(".weight", ".weight_scale_inv") for p in src_paths]
 
+                    use_fused = moe_backend == "fused"
                     # For GLM-5 FP8, scales are stored as [num_experts, in_blocks, out_blocks]
                     # We need to transpose them to [num_experts, out_blocks, in_blocks] for moe.py
                     new_moe_mappings[scale_key] = WeightMapping(
                         target_path=[target_scale_param] + scale_src_paths,
-                        sharding=("expert", None, None),
+                        sharding=(("data", "tensor"), None, None) if use_fused else ("expert", None, None),
                         transpose=False,
                         transpose_axes=(0, 2, 1),
                         reshape=None,
