@@ -1,5 +1,6 @@
 # Quantization utilities for sglang-jax
 
+import fnmatch
 import itertools
 import logging
 import re
@@ -141,13 +142,6 @@ def apply_linear_quantization(
 
     ignored_layers = quant_config.ignored_layers or []
 
-    # Normalize ignored layer patterns: convert HF dot-index (layers.0.) to
-    # bracket-index (layers[0].) since the model walk uses bracket notation.
-    normalized_ignored = []
-    for ig in ignored_layers:
-        normalized_ignored.append(re.sub(r"\.(\d+)\.", r"[\1].", ig))
-    ignored_layers = normalized_ignored
-
     def _find_matching_rule(path: str):
         """Find the first rule that matches the given module path."""
         for rule in compiled_rules:
@@ -173,11 +167,31 @@ def apply_linear_quantization(
                 if isinstance(attr_value, LinearBase):
                     # Check if this path matches any rule
                     dot_path = child_path.replace("/", ".")
-                    if any(
-                        dot_path == ignored or dot_path.endswith(f".{ignored}")
-                        for ignored in ignored_layers
-                    ):
-                        logger.info("Skipping %s - in ignored_layers", dot_path)
+                    # Convert bracket-style index (layers[0]) back to HF dot-style index (layers.0)
+                    # to align with standard HF ignored layers patterns.
+                    dot_path_hf = re.sub(r"\[(\d+)\]", r".\1", dot_path)
+                    
+                    # Framework-level ignore: Indexer layers (DSA sparse attention mechanism)
+                    # are extremely quantization-sensitive and must remain in full precision (BF16).
+                    if "indexer" in dot_path_hf:
+                        logger.info("Skipping %s - indexer layer (quantization-sensitive)", dot_path_hf)
+                        continue
+
+                    def is_ignored_match(path_str: str, patterns: list[str]) -> bool:
+                        for pat in patterns:
+                            if pat.startswith("re:"):
+                                if re.search(pat[3:], path_str):
+                                    return True
+                            elif "*" in pat:
+                                if fnmatch.fnmatch(path_str, pat) or fnmatch.fnmatch(path_str, f"*{pat}*"):
+                                    return True
+                            else:
+                                if path_str == pat or path_str.endswith(f".{pat}") or pat in path_str:
+                                    return True
+                        return False
+
+                    if is_ignored_match(dot_path_hf, ignored_layers) or is_ignored_match(dot_path, ignored_layers):
+                        logger.info("Skipping %s - in ignored_layers", dot_path_hf)
                         continue
 
                     rule = _find_matching_rule(child_path)
@@ -249,14 +263,41 @@ def apply_moe_quantization(
 
     def _is_ignored(log_path: str) -> bool:
         if not ignored_layers:
+            # Fast exit for indexer
+            if "indexer" in log_path:
+                return True
             return False
-        # Walker emits paths like "model/layers[5]/mlp" — normalize to dot
-        # form ("model.layers.5.mlp") so it can be compared against HF
-        # ignore entries which use dot notation.
+        
         normalized = log_path.replace("/", ".")
         normalized = re.sub(r"\.\[(\d+)\]", r".\1", normalized)
         normalized = re.sub(r"\[(\d+)\]", r".\1", normalized)
-        return any(normalized == ig or normalized.endswith(f".{ig}") for ig in ignored_layers)
+        
+        if "indexer" in normalized or "indexer" in log_path:
+            return True
+
+        for pat in ignored_layers:
+            if pat.startswith("re:"):
+                if re.search(pat[3:], normalized) or re.search(pat[3:], log_path):
+                    return True
+            elif "*" in pat:
+                if (
+                    fnmatch.fnmatch(normalized, pat)
+                    or fnmatch.fnmatch(normalized, f"*{pat}*")
+                    or fnmatch.fnmatch(log_path, pat)
+                    or fnmatch.fnmatch(log_path, f"*{pat}*")
+                ):
+                    return True
+            else:
+                if (
+                    normalized == pat
+                    or normalized.endswith(f".{pat}")
+                    or pat in normalized
+                    or log_path == pat
+                    or log_path.endswith(f".{pat}")
+                    or pat in log_path
+                ):
+                    return True
+        return False
 
     def _quantize_moe_recursive(obj, path: str = "", visited=None):
         if visited is None:
