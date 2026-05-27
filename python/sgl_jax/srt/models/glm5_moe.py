@@ -307,14 +307,21 @@ class Glm5Attention(nnx.Module):
             # Non-quantized LinearBase
             raw_weight = self.kv_b_proj.weight.value
         else:
-            # QuantizedLinear: weight_q is [n_h * (qk_nope+v), kv_lora_rank] (transposed).
-            wq = self.kv_b_proj.weight_q.value  # [out, in]
+            # QuantizedLinear: weight_q can be stored as [out, in] or [in, out] depending on mapping transpose config
+            wq = self.kv_b_proj.weight_q.value
             ws = self.kv_b_proj.weight_scale.value
-            wq_f32 = wq.T.astype(jnp.float32)  # [in, out]
+            
+            if wq.shape[0] == self.kv_lora_rank:
+                # Already transposed to [in, out] during weight loading
+                wq_f32 = wq.astype(jnp.float32)
+            else:
+                # Stored as [out, in], needs transposing to [in, out]
+                wq_f32 = wq.T.astype(jnp.float32)
+                
             if ws.ndim == 3:
                 # Block-wise: [in_blocks, 1, out] → dequantize block by block
                 in_blocks, _, n_out = ws.shape
-                block_k = wq.shape[1] // in_blocks
+                block_k = wq_f32.shape[0] // in_blocks
                 wq_f32 = wq_f32.reshape(in_blocks, block_k, n_out)
                 wq_f32 = (wq_f32 * ws.astype(jnp.float32)).reshape(in_blocks * block_k, n_out)
             else:
