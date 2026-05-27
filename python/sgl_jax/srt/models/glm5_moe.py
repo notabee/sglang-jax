@@ -772,6 +772,23 @@ class Glm5ForCausalLM(nnx.Module):
         weight_mappings = self._create_glm5_weight_mappings(model_config)
         loader.load_weights_from_safetensors(weight_mappings)
 
+        # DSA Indexer layers are extremely quantization-sensitive. Under static FP8
+        # models, they are stored under float8 representation in checkpoint but must be 
+        # computed in full precision (BF16) to avoid token degradation and narrow-N matmul crashes.
+        # We load their FP8 weights/scales under QuantizedLinear parameters, and dequantize
+        # them back to unquantized LinearBase (BF16) locally here on TPU host after loading.
+        quant_config = getattr(model_config, "quantization_config", None)
+        is_static_quant = quant_config is not None and quant_config.is_static_checkpoint
+        if is_static_quant:
+            loader.dequant_fp8_layers(
+                self.model.layers,
+                [
+                    ("self_attn.indexer.wq_b", None),
+                    ("self_attn.indexer.wk", None),
+                    ("self_attn.indexer.weights_proj", None),
+                ]
+            )
+
         for layer in self.model.layers:
             layer.self_attn.post_load_weights()
         logger.info("Absorbed MLA weights split successfully!")

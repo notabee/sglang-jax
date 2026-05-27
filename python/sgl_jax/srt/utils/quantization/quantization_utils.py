@@ -171,12 +171,6 @@ def apply_linear_quantization(
                     # Convert bracket-style index (layers[0]) back to HF dot-style index (layers.0)
                     # to align with standard HF ignored layers patterns.
                     dot_path_hf = re.sub(r"\[(\d+)\]", r".\1", dot_path)
-                    
-                    # Framework-level ignore: Indexer layers (DSA sparse attention mechanism)
-                    # are extremely quantization-sensitive and must remain in full precision (BF16).
-                    if "indexer" in dot_path_hf:
-                        logger.info("Skipping %s - indexer layer (quantization-sensitive)", dot_path_hf)
-                        continue
 
                     def is_ignored_match(path_str: str, patterns: list[str]) -> bool:
                         for pat in patterns:
