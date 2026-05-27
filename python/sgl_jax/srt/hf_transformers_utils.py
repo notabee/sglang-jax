@@ -225,12 +225,20 @@ def get_tokenizer(
         # else: use the root path, tokenizer might be in model root
 
     if trust_remote_code:
+        print(f"[DEBUG] starting tokenizer dynamic registration for {tokenizer_name}")
         try:
+            from transformers.models.auto.configuration_auto import CONFIG_MAPPING
+            print(f"[DEBUG] glm_moe_dsa in CONFIG_MAPPING: {'glm_moe_dsa' in CONFIG_MAPPING}")
             config = AutoConfig.from_pretrained(
                 tokenizer_name,
                 trust_remote_code=trust_remote_code,
                 revision=tokenizer_revision,
             )
+            print(f"[DEBUG] Loaded config type: {type(config)}")
+            print(f"[DEBUG] config has auto_map: {hasattr(config, 'auto_map')}")
+            if hasattr(config, "auto_map"):
+                print(f"[DEBUG] config.auto_map: {config.auto_map}")
+
             if hasattr(config, "auto_map") and "AutoTokenizer" in config.auto_map:
                 tokenizer_class_name = config.auto_map["AutoTokenizer"]
                 if isinstance(tokenizer_class_name, list):
@@ -245,27 +253,30 @@ def get_tokenizer(
                 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 
                 if slow_tokenizer_class_name:
+                    print(f"[DEBUG] Loading slow tokenizer class: {slow_tokenizer_class_name}")
                     slow_tokenizer_class = get_class_from_dynamic_module(
                         slow_tokenizer_class_name,
                         tokenizer_name,
                     )
                 if fast_tokenizer_class_name:
+                    print(f"[DEBUG] Loading fast tokenizer class: {fast_tokenizer_class_name}")
                     fast_tokenizer_class = get_class_from_dynamic_module(
                         fast_tokenizer_class_name,
                         tokenizer_name,
                     )
 
                 if slow_tokenizer_class or fast_tokenizer_class:
+                    print(f"[DEBUG] Registering tokenizer for config type: {type(config)}")
                     AutoTokenizer.register(
                         type(config),
                         slow_tokenizer_class=slow_tokenizer_class,
                         fast_tokenizer_class=fast_tokenizer_class,
                     )
+                    print("[DEBUG] Tokenizer registered successfully!")
         except Exception as e:
-            warnings.warn(
-                f"Failed to pre-register custom tokenizer dynamically: {e}",
-                stacklevel=2,
-            )
+            import traceback
+            print("[DEBUG] Exception in dynamic registration:")
+            traceback.print_exc()
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(
