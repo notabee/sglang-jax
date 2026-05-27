@@ -225,6 +225,9 @@ class WeightLoader:
         weight_q = ql.weight_q.value
         weight_scale = ql.weight_scale.value
 
+        if isinstance(weight_scale, jax.ShapeDtypeStruct):
+            weight_scale = jnp.ones(weight_scale.shape, dtype=jnp.float32)
+
         if weight_scale.ndim == 3:
             weight_bf16 = self._block_dequant(weight_q, weight_scale, head_dim=head_dim)
         elif weight_scale.ndim == 1:
