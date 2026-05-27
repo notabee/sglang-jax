@@ -40,12 +40,9 @@ _CONFIG_REGISTRY: dict[str, type[PretrainedConfig]] = {
 
 if "glm_moe_dsa" not in CONFIG_MAPPING:
     _CONFIG_REGISTRY[GlmMoeDsaConfig.model_type] = GlmMoeDsaConfig
-    with contextlib.suppress(ValueError):
-        AutoTokenizer.register(
-            GlmMoeDsaConfig,
-            slow_tokenizer_class=PreTrainedTokenizer,
-            fast_tokenizer_class=PreTrainedTokenizerFast,
-        )
+    with contextlib.suppress(Exception):
+        from transformers.models.auto.tokenization_auto import TOKENIZER_MAPPING
+        TOKENIZER_MAPPING._reverse_config_mapping['GlmMoeDsaConfig'] = 'gpt2'
 
 for name, cls in _CONFIG_REGISTRY.items():
     with contextlib.suppress(ValueError):
