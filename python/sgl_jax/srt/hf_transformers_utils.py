@@ -235,12 +235,35 @@ def get_tokenizer(
                 revision=tokenizer_revision,
             )
             print(f"[DEBUG] Loaded config type: {type(config)}")
-            print(f"[DEBUG] config has auto_map: {hasattr(config, 'auto_map')}")
-            if hasattr(config, "auto_map"):
-                print(f"[DEBUG] config.auto_map: {config.auto_map}")
 
-            if hasattr(config, "auto_map") and "AutoTokenizer" in config.auto_map:
-                tokenizer_class_name = config.auto_map["AutoTokenizer"]
+            import json
+            tokenizer_class_name = None
+
+            config_file = os.path.join(tokenizer_name, "config.json")
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, "r") as f:
+                        conf = json.load(f)
+                        print(f"[DEBUG] config.json keys: {list(conf.keys())}")
+                        if "auto_map" in conf and "AutoTokenizer" in conf["auto_map"]:
+                            tokenizer_class_name = conf["auto_map"]["AutoTokenizer"]
+                            print(f"[DEBUG] Found tokenizer class from auto_map: {tokenizer_class_name}")
+                except Exception as e:
+                    print(f"[DEBUG] Failed to read config.json: {e}")
+
+            tokenizer_config_file = os.path.join(tokenizer_name, "tokenizer_config.json")
+            if os.path.exists(tokenizer_config_file) and not tokenizer_class_name:
+                try:
+                    with open(tokenizer_config_file, "r") as f:
+                        tok_conf = json.load(f)
+                        print(f"[DEBUG] tokenizer_config.json keys: {list(tok_conf.keys())}")
+                        if "tokenizer_class" in tok_conf:
+                            tokenizer_class_name = tok_conf["tokenizer_class"]
+                            print(f"[DEBUG] Found tokenizer class from tokenizer_config.json: {tokenizer_class_name}")
+                except Exception as e:
+                    print(f"[DEBUG] Failed to read tokenizer_config.json: {e}")
+
+            if tokenizer_class_name:
                 if isinstance(tokenizer_class_name, list):
                     slow_tokenizer_class_name, fast_tokenizer_class_name = tokenizer_class_name
                 else:
@@ -250,28 +273,60 @@ def get_tokenizer(
                 slow_tokenizer_class = None
                 fast_tokenizer_class = None
 
+                import transformers
+                slow_tokenizer_class = getattr(transformers, slow_tokenizer_class_name, None) if slow_tokenizer_class_name else None
+                fast_tokenizer_class = getattr(transformers, fast_tokenizer_class_name, None) if fast_tokenizer_class_name else None
+
                 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 
-                if slow_tokenizer_class_name:
-                    print(f"[DEBUG] Loading slow tokenizer class: {slow_tokenizer_class_name}")
-                    slow_tokenizer_class = get_class_from_dynamic_module(
-                        slow_tokenizer_class_name,
-                        tokenizer_name,
-                    )
-                if fast_tokenizer_class_name:
-                    print(f"[DEBUG] Loading fast tokenizer class: {fast_tokenizer_class_name}")
-                    fast_tokenizer_class = get_class_from_dynamic_module(
-                        fast_tokenizer_class_name,
-                        tokenizer_name,
-                    )
+                if not slow_tokenizer_class and slow_tokenizer_class_name:
+                    if "." in slow_tokenizer_class_name:
+                        try:
+                            slow_tokenizer_class = get_class_from_dynamic_module(
+                                slow_tokenizer_class_name,
+                                tokenizer_name,
+                            )
+                            print(f"[DEBUG] Loaded slow tokenizer class dynamically: {slow_tokenizer_class}")
+                        except Exception as e:
+                            print(f"[DEBUG] Failed to load slow tokenizer class dynamically: {e}")
+                    else:
+                        # Try mapping without dot
+                        slow_tokenizer_class = getattr(transformers, slow_tokenizer_class_name, None)
+
+                if not fast_tokenizer_class and fast_tokenizer_class_name:
+                    if "." in fast_tokenizer_class_name:
+                        try:
+                            fast_tokenizer_class = get_class_from_dynamic_module(
+                                fast_tokenizer_class_name,
+                                tokenizer_name,
+                            )
+                            print(f"[DEBUG] Loaded fast tokenizer class dynamically: {fast_tokenizer_class}")
+                        except Exception as e:
+                            print(f"[DEBUG] Failed to load fast tokenizer class dynamically: {e}")
+                    else:
+                        # Try mapping without dot
+                        fast_tokenizer_class = getattr(transformers, fast_tokenizer_class_name, None)
+
+                # Fallback to native ChatGLMTokenizer/GlmTokenizer if still unresolved
+                if not slow_tokenizer_class:
+                    slow_tokenizer_class = getattr(transformers, "ChatGLMTokenizer", None) or getattr(transformers, "GlmTokenizer", None)
+                    print(f"[DEBUG] Fallback to native transformers tokenizer class: {slow_tokenizer_class}")
 
                 if slow_tokenizer_class or fast_tokenizer_class:
-                    print(f"[DEBUG] Registering tokenizer for config type: {type(config)}")
+                    print(f"[DEBUG] Registering tokenizer slow_class={slow_tokenizer_class}, fast_class={fast_tokenizer_class} to {type(config)}")
                     AutoTokenizer.register(
                         type(config),
                         slow_tokenizer_class=slow_tokenizer_class,
                         fast_tokenizer_class=fast_tokenizer_class,
                     )
+                    print("[DEBUG] Tokenizer registered successfully!")
+            else:
+                # Hard fallback to native ChatGLMTokenizer/GlmTokenizer if no class name was found
+                import transformers
+                slow_class = getattr(transformers, "ChatGLMTokenizer", None) or getattr(transformers, "GlmTokenizer", None)
+                if slow_class:
+                    print(f"[DEBUG] No tokenizer class specified in config.json/tokenizer_config.json. Hard fallback registering: {slow_class}")
+                    AutoTokenizer.register(type(config), slow_tokenizer_class=slow_class)
                     print("[DEBUG] Tokenizer registered successfully!")
         except Exception as e:
             import traceback
