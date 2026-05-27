@@ -219,6 +219,50 @@ def get_tokenizer(
         if os.path.isdir(sub_dir_path):
             tokenizer_name = sub_dir_path
         # else: use the root path, tokenizer might be in model root
+
+    if trust_remote_code:
+        try:
+            config = AutoConfig.from_pretrained(
+                tokenizer_name,
+                trust_remote_code=trust_remote_code,
+                revision=tokenizer_revision,
+            )
+            if hasattr(config, "auto_map") and "AutoTokenizer" in config.auto_map:
+                tokenizer_class_name = config.auto_map["AutoTokenizer"]
+                if isinstance(tokenizer_class_name, list):
+                    slow_tokenizer_class_name, fast_tokenizer_class_name = tokenizer_class_name
+                else:
+                    slow_tokenizer_class_name = tokenizer_class_name
+                    fast_tokenizer_class_name = None
+
+                slow_tokenizer_class = None
+                fast_tokenizer_class = None
+
+                from transformers.dynamic_module_utils import get_class_from_dynamic_module
+
+                if slow_tokenizer_class_name:
+                    slow_tokenizer_class = get_class_from_dynamic_module(
+                        slow_tokenizer_class_name,
+                        tokenizer_name,
+                    )
+                if fast_tokenizer_class_name:
+                    fast_tokenizer_class = get_class_from_dynamic_module(
+                        fast_tokenizer_class_name,
+                        tokenizer_name,
+                    )
+
+                if slow_tokenizer_class or fast_tokenizer_class:
+                    AutoTokenizer.register(
+                        type(config),
+                        slow_tokenizer_class=slow_tokenizer_class,
+                        fast_tokenizer_class=fast_tokenizer_class,
+                    )
+        except Exception as e:
+            warnings.warn(
+                f"Failed to pre-register custom tokenizer dynamically: {e}",
+                stacklevel=2,
+            )
+
     try:
         tokenizer = AutoTokenizer.from_pretrained(
             tokenizer_name,
