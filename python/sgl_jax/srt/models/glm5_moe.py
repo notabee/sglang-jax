@@ -1042,7 +1042,7 @@ class Glm5ForCausalLM(nnx.Module):
                     # We need to transpose them to [num_experts, out_blocks, in_blocks] for moe.py
                     new_moe_mappings[scale_key] = WeightMapping(
                         target_path=[target_scale_param] + scale_src_paths,
-                        sharding=None,
+                        sharding=("expert", None, None),
                         transpose=False,
                         transpose_axes=(0, 2, 1),
                         reshape=None,
