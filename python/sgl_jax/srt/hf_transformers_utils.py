@@ -28,14 +28,18 @@ class GlmMoeDsaConfig(PretrainedConfig):
     model_type = "glm_moe_dsa"
 
 
+from transformers.models.auto.configuration_auto import CONFIG_MAPPING
+
 _CONFIG_REGISTRY: dict[str, type[PretrainedConfig]] = {
     cls.model_type: cls
     for cls in [
         BailingHybridConfig,
         KimiLinearConfig,
-        GlmMoeDsaConfig,
     ]
 }
+
+if "glm_moe_dsa" not in CONFIG_MAPPING:
+    _CONFIG_REGISTRY[GlmMoeDsaConfig.model_type] = GlmMoeDsaConfig
 
 for name, cls in _CONFIG_REGISTRY.items():
     with contextlib.suppress(ValueError):
