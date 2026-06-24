@@ -223,6 +223,13 @@ class Glm5Attention(nnx.Module):
             self.kv_lora_rank, epsilon=rms_norm_eps, param_dtype=dtype, scope_name="kv_a_layernorm"
         )
 
+        self.w_qkv_a = nnx.Param(
+            jnp.zeros(
+                (hidden_size, self.q_lora_rank + self.kv_lora_rank + self.qk_rope_head_dim),
+                dtype=dtype,
+            )
+        )
+
         self.kv_b_proj = LinearBase(
             input_size=self.kv_lora_rank,
             output_size=num_heads * (self.qk_nope_head_dim + self.v_head_dim),
@@ -305,6 +312,12 @@ class Glm5Attention(nnx.Module):
     def post_load_weights(self):
         if not self.use_absorbed:
             return
+        if self.q_a_proj is not None and self.kv_a_proj_with_mqa is not None:
+            self.w_qkv_a.value = jnp.concatenate(
+                [self.q_a_proj.weight.value, self.kv_a_proj_with_mqa.weight.value], axis=-1
+            )
+            self.q_a_proj = None
+            self.kv_a_proj_with_mqa = None
         if self.kv_b_proj is None:
             return
         if hasattr(self.kv_b_proj, "weight"):
@@ -402,7 +415,17 @@ class Glm5Attention(nnx.Module):
         forward_batch: ForwardBatch,
         token_to_kv_pool: KVCache,
     ) -> tuple[jax.Array, jax.Array]:
-        q_compressed, _ = self.q_a_proj(hidden_states)
+        if self.q_a_proj is None:
+            qkv_a = jax.lax.dot_general(
+                hidden_states,
+                self.w_qkv_a.value,
+                (((hidden_states.ndim - 1,), (0,)), ((), ())),
+            )
+            q_compressed, latent_cache = jnp.split(qkv_a, [self.q_lora_rank], axis=-1)
+        else:
+            q_compressed, _ = self.q_a_proj(hidden_states)
+            latent_cache, _ = self.kv_a_proj_with_mqa(hidden_states)
+
         q_compressed = self.q_a_layernorm(q_compressed)
         q, _ = self.q_b_proj(q_compressed)
         q = q.reshape(-1, self.num_heads, self.qk_head_dim)
@@ -412,7 +435,6 @@ class Glm5Attention(nnx.Module):
         q_nope = q[:, :, : self.qk_nope_head_dim]
         q_rope = q[:, :, self.qk_nope_head_dim :]
 
-        latent_cache, _ = self.kv_a_proj_with_mqa(hidden_states)
         compressed, k_rope = jnp.split(latent_cache, [self.kv_lora_rank], axis=-1)
         compressed = self.kv_a_layernorm(compressed)
 
